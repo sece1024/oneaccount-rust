@@ -1,0 +1,51 @@
+[package]
+name = "oneaccount"
+version = "0.1.0"
+edition = "2024"
+description = "A cross-platform personal accounting software"
+
+[[bin]]
+name = "oneaccount"
+path = "src/main.rs"
+
+[dependencies]
+# SQLite — bundled 模式无需系统安装 SQLite
+rusqlite = { version = "0.31", features = ["bundled"] }
+r2d2 = "0.8"
+r2d2_sqlite = "0.24"
+
+# TUI — crossterm 后端真正跨平台（Windows/macOS/Linux）
+ratatui = "0.29"
+crossterm = "0.28"
+
+# HTTP 服务
+axum = { version = "0.7", features = ["json"] }
+tokio = { version = "1", features = ["full"] }
+tower-http = { version = "0.6", features = ["cors"] }
+
+# CLI 参数解析
+clap = { version = "4", features = ["derive"] }
+
+# 序列化
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# 日期处理
+chrono = { version = "0.4", features = ["serde"] }
+
+# CSV
+csv = "1"
+
+# 错误处理
+anyhow = "1"
+thiserror = "1"
+
+# 数据目录（跨平台 home/data dir）
+dirs = "5"
+
+# 日志
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[dev-dependencies]
+tempfile = "3"
