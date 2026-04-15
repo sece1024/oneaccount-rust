@@ -163,6 +163,9 @@ impl App {
                     self.monthly_form.editing = false;
                     self.monthly_form.input_buf.clear();
                 }
+                KeyCode::Char('-') if self.monthly_form.input_buf.is_empty() => {
+                    self.monthly_form.input_buf.push('-');
+                }
                 KeyCode::Char(c) if c.is_ascii_digit() || c == '.' => {
                     self.monthly_form.input_buf.push(c);
                 }

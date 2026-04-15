@@ -11,6 +11,8 @@ pub enum AccountType {
     Crypto,
     SocialInsurance,
     Fund,
+    /// 信用账户：信用卡、花呗、美团月付等负债账户
+    CreditCard,
 }
 
 impl std::fmt::Display for AccountType {
@@ -24,6 +26,7 @@ impl std::fmt::Display for AccountType {
             AccountType::Crypto => write!(f, "crypto"),
             AccountType::SocialInsurance => write!(f, "social_insurance"),
             AccountType::Fund => write!(f, "fund"),
+            AccountType::CreditCard => write!(f, "credit_card"),
         }
     }
 }
@@ -40,6 +43,7 @@ impl std::str::FromStr for AccountType {
             "crypto" | "虚拟货币" | "加密货币" => Ok(AccountType::Crypto),
             "social_insurance" | "社保" => Ok(AccountType::SocialInsurance),
             "fund" | "基金" => Ok(AccountType::Fund),
+            "credit_card" | "信用卡" | "花呗" | "月付" => Ok(AccountType::CreditCard),
             _ => Err(format!("未知账户类型: {s}")),
         }
     }
@@ -56,6 +60,7 @@ impl AccountType {
             AccountType::Crypto => "虚拟货币",
             AccountType::SocialInsurance => "社保",
             AccountType::Fund => "基金",
+            AccountType::CreditCard => "信用/负债",
         }
     }
 
@@ -69,6 +74,7 @@ impl AccountType {
             AccountType::Crypto,
             AccountType::SocialInsurance,
             AccountType::Fund,
+            AccountType::CreditCard,
         ]
     }
 }

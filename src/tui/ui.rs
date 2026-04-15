@@ -18,6 +18,15 @@ const YELLOW: Color = Color::Yellow;
 const DARK: Color = Color::DarkGray;
 
 fn title_style() -> Style { Style::default().fg(CYAN).add_modifier(Modifier::BOLD) }
+
+/// 将余额格式化为带货币符号的字符串，负数显示为 -¥1234.56
+fn fmt_balance(b: f64) -> String {
+    if b < 0.0 {
+        format!("-¥{:.2}", b.abs())
+    } else {
+        format!("¥{:.2}", b)
+    }
+}
 fn active_style() -> Style { Style::default().fg(YELLOW).add_modifier(Modifier::BOLD) }
 fn sel_style() -> Style { Style::default().bg(Color::DarkGray).add_modifier(Modifier::BOLD) }
 
@@ -141,7 +150,7 @@ fn render_trend_table(frame: &mut Frame, app: &mut App, area: Rect) {
             Row::new([
                 Cell::from(format!("{}-{:02}", t.year, t.month)),
                 Cell::from(Span::styled(
-                    format!("¥{:.2}", t.total),
+                    fmt_balance(t.total),
                     Style::default().fg(GREEN).add_modifier(Modifier::BOLD),
                 )),
                 Cell::from(Span::styled(delta_str, Style::default().fg(delta_color))),
@@ -193,7 +202,7 @@ fn render_latest_snapshot(frame: &mut Frame, app: &App, area: Rect) {
                 Cell::from(acc.name.clone()),
                 Cell::from(acc.account_type.display_name()),
                 Cell::from(Span::styled(
-                    format!("¥{:.2}", acc.balance),
+                    fmt_balance(acc.balance),
                     Style::default().fg(color),
                 )),
             ])
@@ -201,12 +210,13 @@ fn render_latest_snapshot(frame: &mut Frame, app: &App, area: Rect) {
         .collect();
 
     let total: f64 = app.accounts.iter().map(|a| a.balance).sum();
+    let total_color = if total >= 0.0 { GREEN } else { RED };
     let total_row = Row::new([
         Cell::from(Span::styled("合计", Style::default().add_modifier(Modifier::BOLD))),
         Cell::from(""),
         Cell::from(Span::styled(
-            format!("¥{:.2}", total),
-            Style::default().fg(GREEN).add_modifier(Modifier::BOLD),
+            fmt_balance(total),
+            Style::default().fg(total_color).add_modifier(Modifier::BOLD),
         )),
     ]);
 
@@ -263,7 +273,11 @@ fn render_monthly_entry(frame: &mut Frame, app: &App, area: Rect) {
 
             let new_val = if is_editing {
                 // 正在输入中，显示输入框
-                format!("¥{}█", form.input_buf)
+                if form.input_buf.starts_with('-') {
+                    format!("-¥{}█", &form.input_buf[1..])
+                } else {
+                    format!("¥{}█", form.input_buf)
+                }
             } else {
                 item.display_new()
             };
@@ -307,13 +321,13 @@ fn render_monthly_entry(frame: &mut Frame, app: &App, area: Rect) {
     let confirmed = form.confirmed_count();
     let total = form.confirmed_total();
     let hint = if form.editing {
-        "[Enter]确认  [Esc]取消输入  [数字/.]输入余额".into()
+        "[Enter]确认  [Esc]取消输入  [数字/.]输入余额  [-]负数（负债）".into()
     } else {
         format!(
-            "已填 {}/{} 个账户  合计 ¥{:.2}  [Enter]编辑余额  [Ctrl+S]保存",
+            "已填 {}/{} 个账户  合计 {}  [Enter]编辑余额  [Ctrl+S]保存",
             confirmed,
             form.entries.len(),
-            total
+            fmt_balance(total)
         )
     };
     frame.render_widget(
@@ -443,7 +457,7 @@ fn render_accounts(frame: &mut Frame, app: &App, area: Rect) {
     let total: f64 = app.accounts.iter().map(|a| a.balance).sum();
     let block = Block::default()
         .borders(Borders::ALL)
-        .title(format!(" 💳 账户管理（共 {} 个，总计 ¥{:.2}）[a]新建 [d]删除", app.accounts.len(), total))
+        .title(format!(" 💳 账户管理（共 {} 个，总计 {}）[a]新建 [d]删除", app.accounts.len(), fmt_balance(total)))
         .title_style(title_style());
 
     if app.accounts.is_empty() {
@@ -463,7 +477,7 @@ fn render_accounts(frame: &mut Frame, app: &App, area: Rect) {
                 Cell::from(acc.name.clone()),
                 Cell::from(acc.account_type.display_name()),
                 Cell::from(acc.currency.clone()),
-                Cell::from(Span::styled(format!("¥{:.2}", acc.balance), Style::default().fg(color))),
+                Cell::from(Span::styled(fmt_balance(acc.balance), Style::default().fg(color))),
             ])
         })
         .collect();

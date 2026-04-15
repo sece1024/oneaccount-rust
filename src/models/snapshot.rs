@@ -1,5 +1,13 @@
 use serde::{Deserialize, Serialize};
 
+fn fmt_balance(b: f64) -> String {
+    if b < 0.0 {
+        format!("-¥{:.2}", b.abs())
+    } else {
+        format!("¥{:.2}", b)
+    }
+}
+
 /// 单账户月结快照
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AccountSnapshot {
@@ -39,15 +47,20 @@ pub struct MonthlyEntryItem {
 impl MonthlyEntryItem {
     pub fn display_last(&self) -> String {
         self.last_balance
-            .map(|b| format!("¥{b:.2}"))
+            .map(|b| fmt_balance(b))
             .unwrap_or_else(|| "—".into())
     }
 
     pub fn display_new(&self) -> String {
         if let Some(b) = self.confirmed_balance {
-            format!("¥{b:.2}")
+            fmt_balance(b)
         } else if !self.input.is_empty() {
-            format!("¥{}", self.input)
+            // 用户正在输入，原样显示（前缀 ¥ 或 -¥）
+            if self.input.starts_with('-') {
+                format!("-¥{}", &self.input[1..])
+            } else {
+                format!("¥{}", self.input)
+            }
         } else {
             String::new()
         }
