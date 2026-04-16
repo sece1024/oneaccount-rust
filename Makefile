@@ -17,6 +17,16 @@ run-tui:
 run-server:
 	cargo run -- server --port 8080
 
+# ── 前端 ─────────────────────────────────────────────────────────────────────
+
+.PHONY: dev-frontend
+dev-frontend:
+	cd frontend && npm run dev
+
+.PHONY: build-frontend
+build-frontend:
+	cd frontend && npm run build
+
 # ── 测试 ───────────────────────────────────────────────────────────────────────
 
 .PHONY: test

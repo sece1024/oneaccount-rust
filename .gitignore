@@ -1,8 +1,9 @@
 # Rust
 /target
 
-# 打包输出
-/dist
+# 前端构建产物
+/frontend/dist
+/frontend/node_modules
 
 # macOS
 .DS_Store
