@@ -58,7 +58,7 @@
     <div class="totals">
       <span class="muted">活动资金 <strong class:neg={liquidTotal() < 0} class:pos={liquidTotal() >= 0}>{fmtBalance(liquidTotal())}</strong></span>
       <span class="sep">·</span>
-      <span class="muted">非活动 <strong class="yellow">{fmtBalance(illiquidTotal())}</strong></span>
+      <span class="muted">非活动资金 <strong class="yellow">{fmtBalance(illiquidTotal())}</strong></span>
       <span class="sep">·</span>
       <span class="muted">总计 <strong class:neg={total() < 0} class:pos={total() >= 0}>{fmtBalance(total())}</strong></span>
     </div>
@@ -118,7 +118,7 @@
     <div class="card">
       <table>
         <thead>
-          <tr><th>账户名</th><th>类型</th><th>资金类型</th><th>货币</th><th>余额</th><th></th></tr>
+          <tr><th>账户名</th><th>账户类型</th><th>资金类型</th><th>货币</th><th>余额</th><th></th></tr>
         </thead>
         <tbody>
           {#each accounts as acc}
@@ -131,9 +131,9 @@
                   class:liquid={acc.is_liquid}
                   class:illiquid={!acc.is_liquid}
                   on:click={() => toggleLiquid(acc)}
-                  title="点击切换资金类型"
+                  title="点击切换"
                 >
-                  {acc.is_liquid ? '活动资金' : '非活动'}
+                  {acc.is_liquid ? '💧 活动资金' : '🔒 非活动资金'}
                 </button>
               </td>
               <td>{acc.currency}</td>
