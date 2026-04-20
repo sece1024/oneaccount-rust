@@ -23,6 +23,7 @@ fn api_routes(service: Arc<AppService>) -> Router {
         // Accounts
         .route("/accounts", get(handlers::list_accounts).post(handlers::create_account))
         .route("/accounts/:id", delete(handlers::delete_account))
+        .route("/accounts/:id/liquid", post(handlers::update_account_liquid))
         // Categories
         .route("/categories", get(handlers::list_categories).post(handlers::create_category))
         // Transactions

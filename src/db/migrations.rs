@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS accounts (
     account_type TEXT    NOT NULL,
     currency     TEXT    NOT NULL DEFAULT 'CNY',
     balance      REAL    NOT NULL DEFAULT 0.0,
+    is_liquid    INTEGER NOT NULL DEFAULT 1,
     created_at   TEXT    NOT NULL,
     updated_at   TEXT    NOT NULL
 );
@@ -68,9 +69,18 @@ fn apply_incremental_migrations(conn: &Connection) -> Result<()> {
     let _ = conn.execute_batch(
         "ALTER TABLE transactions ADD COLUMN is_large INTEGER NOT NULL DEFAULT 0;",
     );
-    // is_large 列存在后才能建索引（同样忽略已存在错误）
     let _ = conn.execute_batch(
         "CREATE INDEX IF NOT EXISTS idx_tx_is_large ON transactions(is_large);",
+    );
+    // 为旧版 accounts 表添加 is_liquid 列（活动/非活动资金）
+    let _ = conn.execute_batch(
+        "ALTER TABLE accounts ADD COLUMN is_liquid INTEGER NOT NULL DEFAULT 1;",
+    );
+    // 根据账户类型自动设置默认值：社保/基金/股票/虚拟货币 默认为非活动资金
+    let _ = conn.execute_batch(
+        "UPDATE accounts SET is_liquid = 0
+         WHERE is_liquid = 1
+           AND account_type IN ('social_insurance','fund','stock','crypto');",
     );
     Ok(())
 }

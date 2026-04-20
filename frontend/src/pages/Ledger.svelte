@@ -42,10 +42,8 @@
   function initEditRow() {
     editValues = {}
     for (const item of entryItems) {
-      // 预填上次快照余额（如有）
       editValues[item.account_id] = item.last_balance != null ? String(item.last_balance) : ''
     }
-    // 如果本月已有快照，则预填本月数据
     const existing = historyRows.find(r => r.year === editYear && r.month === editMonth)
     if (existing) {
       for (const item of entryItems) {
@@ -55,13 +53,18 @@
     }
   }
 
-  // ── 实时汇总 ──────────────────────────────────────────────────────────────
+  // ── 实时汇总（活动 / 非活动 / 总计） ─────────────────────────────────────
 
-  function editTotal(): number {
-    return entryItems.reduce((sum, item) => {
+  function editTotals(): { liquid: number; illiquid: number; total: number } {
+    let liquid = 0, illiquid = 0
+    for (const item of entryItems) {
       const v = parseFloat(editValues[item.account_id] ?? '')
-      return sum + (isNaN(v) ? 0 : v)
-    }, 0)
+      if (isNaN(v)) continue
+      const acc = accounts.find(a => a.id === item.account_id)
+      if (acc?.is_liquid ?? true) liquid += v
+      else illiquid += v
+    }
+    return { liquid, illiquid, total: liquid + illiquid }
   }
 
   // ── 保存 ─────────────────────────────────────────────────────────────────
@@ -77,7 +80,6 @@
       saveMsg = `✅ ${editYear}-${String(editMonth).padStart(2,'0')} 已保存`
       setTimeout(() => saveMsg = '', 3000)
       await load()
-      // 跳到下一个月
       goNextMonth()
     } catch (e: any) {
       error = e.message
@@ -90,17 +92,14 @@
     if (e.key === 'Tab') {
       e.preventDefault()
       if (idx < entryItems.length - 1) {
-        await tick()
-        focusCell(idx + 1)
+        await tick(); focusCell(idx + 1)
       } else {
-        // 最后一列 Tab → 保存
         await save()
       }
     } else if (e.key === 'Enter') {
       e.preventDefault()
       if (idx < entryItems.length - 1) {
-        await tick()
-        focusCell(idx + 1)
+        await tick(); focusCell(idx + 1)
       } else {
         await save()
       }
@@ -109,8 +108,7 @@
 
   function focusCell(idx: number) {
     const el = document.querySelector<HTMLInputElement>(`[data-cell="${idx}"]`)
-    el?.focus()
-    el?.select()
+    el?.focus(); el?.select()
   }
 
   // ── 月份导航 ─────────────────────────────────────────────────────────────
@@ -169,12 +167,15 @@
           <tr>
             <th class="col-month">月份</th>
             {#each entryItems as item}
-              <th class="col-account">
+              {@const acc = accounts.find(a => a.id === item.account_id)}
+              <th class="col-account" class:col-illiquid={acc && !acc.is_liquid}>
                 <div class="acc-name">{item.account_name}</div>
                 <div class="acc-type">{item.account_type}</div>
               </th>
             {/each}
-            <th class="col-total">总资产</th>
+            <th class="col-total col-liquid">活动资金</th>
+            <th class="col-total col-restricted">非活动资金</th>
+            <th class="col-total col-grand">总资产</th>
           </tr>
         </thead>
         <tbody>
@@ -186,7 +187,8 @@
               <span class="badge">编辑中</span>
             </td>
             {#each entryItems as item, idx}
-              <td class="col-account">
+              {@const acc = accounts.find(a => a.id === item.account_id)}
+              <td class="col-account" class:col-illiquid={acc && !acc.is_liquid}>
                 <input
                   class="cell-input"
                   class:neg-input={parseFloat(editValues[item.account_id] ?? '') < 0}
@@ -199,9 +201,9 @@
                 />
               </td>
             {/each}
-            <td class="col-total" class:pos={editTotal() >= 0} class:neg={editTotal() < 0}>
-              {fmtBalance(editTotal())}
-            </td>
+            <td class="col-total" class:pos={editTotals().liquid >= 0} class:neg={editTotals().liquid < 0}>{fmtBalance(editTotals().liquid)}</td>
+            <td class="col-total col-restricted-val" class:pos={editTotals().illiquid >= 0} class:neg={editTotals().illiquid < 0}>{fmtBalance(editTotals().illiquid)}</td>
+            <td class="col-total col-grand-val" class:pos={editTotals().total >= 0} class:neg={editTotals().total < 0}>{fmtBalance(editTotals().total)}</td>
           </tr>
 
           <!-- 历史行（最新在上） -->
@@ -212,13 +214,14 @@
                 <td class="col-month">{row.year}-{String(row.month).padStart(2,'0')}</td>
                 {#each entryItems as item}
                   {@const bal = row.balances[String(item.account_id)]}
-                  <td class="col-account" class:neg={bal != null && bal < 0} class:pos={bal != null && bal >= 0}>
+                  {@const acc = accounts.find(a => a.id === item.account_id)}
+                  <td class="col-account" class:neg={bal != null && bal < 0} class:pos={bal != null && bal >= 0} class:col-illiquid={acc && !acc.is_liquid}>
                     {#if bal != null}{fmtBalance(bal)}{:else}<span class="muted">—</span>{/if}
                   </td>
                 {/each}
-                <td class="col-total" class:pos={row.total >= 0} class:neg={row.total < 0}>
-                  {fmtBalance(row.total)}
-                </td>
+                <td class="col-total" class:pos={row.liquid_total >= 0} class:neg={row.liquid_total < 0}>{fmtBalance(row.liquid_total)}</td>
+                <td class="col-total col-restricted-val" class:pos={row.illiquid_total >= 0} class:neg={row.illiquid_total < 0}>{fmtBalance(row.illiquid_total)}</td>
+                <td class="col-total col-grand-val" class:pos={row.total >= 0} class:neg={row.total < 0}>{fmtBalance(row.total)}</td>
               </tr>
             {/if}
           {/each}
@@ -227,7 +230,12 @@
       </table>
     </div>
 
-    <p class="hint muted">Tab / Enter 切换账户 · 最后一列 Tab 或点击「保存本月」提交 · 点击历史行可重新编辑</p>
+    <div class="legend">
+      <span class="dot liquid"></span> 活动资金（可自由支配）
+      <span class="dot illiquid"></span> 非活动资金（限制提取，如公积金、社保）
+    </div>
+
+    <p class="hint muted">Tab / Enter 切换账户 · 最后一列 Tab 或点击「保存本月」提交 · 点击历史行可重新编辑 · 在账户管理中设置资金类型</p>
   {/if}
 </div>
 
@@ -267,16 +275,23 @@ th {
   top: 0;
 }
 th.col-month { min-width: 90px; }
-th.col-account { min-width: 120px; text-align: right; }
-th.col-total { min-width: 110px; text-align: right; color: var(--cyan); }
+th.col-account { min-width: 110px; text-align: right; }
+th.col-illiquid { background: rgba(251,191,36,.06); }
+th.col-total { min-width: 110px; text-align: right; border-left: 1px solid var(--border); }
+th.col-liquid { color: var(--cyan); }
+th.col-restricted { color: var(--yellow); }
+th.col-grand { color: var(--green); }
 
 .acc-name { color: var(--text); font-size: 12px; }
 .acc-type { color: var(--muted); font-size: 11px; margin-top: 2px; }
 
 td { padding: 8px 14px; border-bottom: 1px solid var(--border); }
 td.col-account, td.col-total { text-align: right; font-variant-numeric: tabular-nums; }
-td.col-total { font-weight: 600; }
+td.col-total { font-weight: 600; border-left: 1px solid var(--border); }
 td.col-month { color: var(--muted); font-size: 13px; white-space: nowrap; }
+td.col-illiquid { background: rgba(251,191,36,.04); }
+td.col-restricted-val { color: var(--yellow); }
+td.col-grand-val { color: var(--text); }
 
 /* 编辑行 */
 .edit-row { background: rgba(125, 211, 252, 0.05); }
@@ -312,6 +327,12 @@ td.col-month { color: var(--muted); font-size: 13px; white-space: nowrap; }
 .history-row { cursor: pointer; transition: background 0.1s; }
 .history-row:hover td { background: var(--bg3); }
 .history-row:last-child td { border-bottom: none; }
+
+/* 图例 */
+.legend { display: flex; align-items: center; gap: 14px; font-size: 12px; color: var(--muted); }
+.dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
+.dot.liquid { background: var(--cyan); }
+.dot.illiquid { background: var(--yellow); }
 
 .hint { font-size: 12px; text-align: center; padding: 4px 0; }
 </style>

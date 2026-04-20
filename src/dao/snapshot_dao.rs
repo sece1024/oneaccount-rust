@@ -127,6 +127,7 @@ mod tests {
                 account_type: AccountType::Bank,
                 currency: "CNY".into(),
                 initial_balance: 0.0,
+            is_liquid: true,
             },
         )
         .unwrap()

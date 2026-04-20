@@ -21,6 +21,7 @@ export interface Account {
   account_type: string
   currency: string
   balance: number
+  is_liquid: boolean
   created_at: string
   updated_at: string
 }
@@ -30,6 +31,7 @@ export interface NewAccount {
   account_type: string
   currency: string
   initial_balance: number
+  is_liquid: boolean
 }
 
 export interface Category {
@@ -102,6 +104,9 @@ export const createAccount = (data: NewAccount) =>
 export const deleteAccount = (id: number) =>
   request<void>(`/accounts/${id}`, { method: 'DELETE' })
 
+export const updateAccountLiquid = (id: number, is_liquid: boolean) =>
+  request<void>(`/accounts/${id}/liquid`, { method: 'POST', body: JSON.stringify({ is_liquid }) })
+
 // ── Categories ────────────────────────────────────────────────────────────────
 
 export const listCategories = () => request<Category[]>('/categories')
@@ -166,6 +171,8 @@ export interface SnapshotGridRow {
   /** account_id (string key from JSON) -> balance */
   balances: Record<string, number>
   total: number
+  liquid_total: number
+  illiquid_total: number
 }
 
 export interface EntryItem {

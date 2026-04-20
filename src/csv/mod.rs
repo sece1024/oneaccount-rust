@@ -155,6 +155,7 @@ mod tests {
             account_type: AccountType::Cash,
             currency: "CNY".into(),
             initial_balance: 0.0,
+            is_liquid: true,
         }).unwrap();
 
         let csv_data = "日期,金额,备注,类型\n2024-01-15,35.5,午饭,支出\n2024-01-16,5000,工资,收入\n";
@@ -176,6 +177,7 @@ mod tests {
             account_type: AccountType::Cash,
             currency: "CNY".into(),
             initial_balance: 0.0,
+            is_liquid: true,
         }).unwrap();
 
         svc.create_transaction(&crate::models::transaction::NewTransaction {

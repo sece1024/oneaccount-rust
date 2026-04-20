@@ -12,8 +12,9 @@ fn map_row(row: &rusqlite::Row) -> rusqlite::Result<Account> {
         account_type: AccountType::from_str(&type_str).unwrap_or(AccountType::Cash),
         currency: row.get(3)?,
         balance: row.get(4)?,
-        created_at: row.get(5)?,
-        updated_at: row.get(6)?,
+        is_liquid: row.get::<_, i64>(5)? != 0,
+        created_at: row.get(6)?,
+        updated_at: row.get(7)?,
     })
 }
 
@@ -22,14 +23,17 @@ pub struct AccountDao;
 impl AccountDao {
     pub fn create(conn: &Connection, req: &NewAccount) -> Result<Account> {
         let now = chrono::Local::now().to_rfc3339();
+        // 若未显式指定，根据账户类型推断默认活动状态
+        let is_liquid = if req.is_liquid { 1i64 } else { 0i64 };
         conn.execute(
-            "INSERT INTO accounts (name, account_type, currency, balance, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?5)",
+            "INSERT INTO accounts (name, account_type, currency, balance, is_liquid, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6)",
             params![
                 req.name,
                 req.account_type.to_string(),
                 req.currency,
                 req.initial_balance,
+                is_liquid,
                 now,
             ],
         )?;
@@ -39,7 +43,7 @@ impl AccountDao {
 
     pub fn find_by_id(conn: &Connection, id: i64) -> Result<Option<Account>> {
         let mut stmt = conn.prepare(
-            "SELECT id, name, account_type, currency, balance, created_at, updated_at
+            "SELECT id, name, account_type, currency, balance, is_liquid, created_at, updated_at
              FROM accounts WHERE id = ?1",
         )?;
         Ok(stmt.query_row(params![id], map_row).optional()?)
@@ -47,8 +51,8 @@ impl AccountDao {
 
     pub fn find_all(conn: &Connection) -> Result<Vec<Account>> {
         let mut stmt = conn.prepare(
-            "SELECT id, name, account_type, currency, balance, created_at, updated_at
-             FROM accounts ORDER BY name",
+            "SELECT id, name, account_type, currency, balance, is_liquid, created_at, updated_at
+             FROM accounts ORDER BY is_liquid DESC, name",
         )?;
         let rows = stmt.query_map([], map_row)?;
         Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
@@ -74,6 +78,15 @@ impl AccountDao {
 
     pub fn delete(conn: &Connection, id: i64) -> Result<()> {
         conn.execute("DELETE FROM accounts WHERE id = ?1", params![id])?;
+        Ok(())
+    }
+
+    pub fn update_liquid(conn: &Connection, id: i64, is_liquid: bool) -> Result<()> {
+        let now = chrono::Local::now().to_rfc3339();
+        conn.execute(
+            "UPDATE accounts SET is_liquid = ?1, updated_at = ?2 WHERE id = ?3",
+            params![is_liquid as i64, now, id],
+        )?;
         Ok(())
     }
 
@@ -105,6 +118,7 @@ mod tests {
             account_type: AccountType::Cash,
             currency: "CNY".into(),
             initial_balance: 100.0,
+            is_liquid: true,
         };
         let acc = AccountDao::create(&conn, &req).unwrap();
         assert_eq!(acc.name, "测试钱包");
@@ -124,6 +138,7 @@ mod tests {
                 account_type: AccountType::Cash,
                 currency: "CNY".into(),
                 initial_balance: 200.0,
+            is_liquid: true,
             },
         )
         .unwrap();

@@ -77,6 +77,11 @@ impl AccountType {
             AccountType::CreditCard,
         ]
     }
+
+    /// 默认是否为活动资金（可随时提取）
+    pub fn default_liquid(&self) -> bool {
+        !matches!(self, AccountType::Stock | AccountType::Crypto | AccountType::SocialInsurance | AccountType::Fund)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -86,6 +91,7 @@ pub struct Account {
     pub account_type: AccountType,
     pub currency: String,
     pub balance: f64,
+    pub is_liquid: bool,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -96,7 +102,11 @@ pub struct NewAccount {
     pub account_type: AccountType,
     pub currency: String,
     pub initial_balance: f64,
+    #[serde(default = "default_true")]
+    pub is_liquid: bool,
 }
+
+fn default_true() -> bool { true }
 
 impl Default for NewAccount {
     fn default() -> Self {
@@ -105,6 +115,7 @@ impl Default for NewAccount {
             account_type: AccountType::Cash,
             currency: "CNY".to_string(),
             initial_balance: 0.0,
+            is_liquid: true,
         }
     }
 }

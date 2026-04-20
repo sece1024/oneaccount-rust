@@ -424,6 +424,7 @@ impl App {
             account_type: acc_type,
             currency: "CNY".into(),
             initial_balance: 0.0,
+            is_liquid: true,
         })?;
         self.new_acc_name.clear();
         self.adding_account = false;

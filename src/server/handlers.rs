@@ -49,6 +49,22 @@ pub async fn delete_account(
     }
 }
 
+#[derive(Deserialize)]
+pub struct UpdateLiquidReq {
+    pub is_liquid: bool,
+}
+
+pub async fn update_account_liquid(
+    State(svc): State<AppState>,
+    Path(id): Path<i64>,
+    Json(req): Json<UpdateLiquidReq>,
+) -> impl IntoResponse {
+    match svc.update_account_liquid(id, req.is_liquid) {
+        Ok(()) => StatusCode::NO_CONTENT.into_response(),
+        Err(e) => internal_error(e).into_response(),
+    }
+}
+
 // ── Categories ────────────────────────────────────────────────────────────────
 
 pub async fn list_categories(State(svc): State<AppState>) -> impl IntoResponse {

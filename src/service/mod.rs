@@ -16,6 +16,8 @@ pub struct SnapshotGridRow {
     pub month: u32,
     pub balances: std::collections::HashMap<i64, f64>,
     pub total: f64,
+    pub liquid_total: f64,
+    pub illiquid_total: f64,
 }
 
 pub struct AppService {
@@ -47,6 +49,11 @@ impl AppService {
     pub fn delete_account(&self, id: i64) -> Result<()> {
         let conn = self.pool.get()?;
         AccountDao::delete(&conn, id)
+    }
+
+    pub fn update_account_liquid(&self, id: i64, is_liquid: bool) -> Result<()> {
+        let conn = self.pool.get()?;
+        AccountDao::update_liquid(&conn, id, is_liquid)
     }
 
     // ── Categories ────────────────────────────────────────────────────────────
@@ -226,22 +233,36 @@ impl AppService {
         SnapshotDao::has_snapshot(&conn, year, month)
     }
 
-    /// 获取最近 N 个月所有账户快照，结构化为行列格式
+    /// 获取最近 N 个月所有账户快照，结构化为行列格式（含活动/非活动分类合计）
     pub fn snapshot_grid(&self, months: i64) -> Result<Vec<SnapshotGridRow>> {
         let conn = self.pool.get()?;
+        let accounts = AccountDao::find_all(&conn)?;
+        // 建立 account_id -> is_liquid 映射
+        let liquid_map: std::collections::HashMap<i64, bool> =
+            accounts.iter().map(|a| (a.id, a.is_liquid)).collect();
+
         let totals = SnapshotDao::monthly_totals(&conn, months)?;
         let mut rows = Vec::new();
         for t in &totals {
             let snaps = SnapshotDao::find_month(&conn, t.year, t.month)?;
             let mut balances = std::collections::HashMap::new();
+            let mut liquid_total = 0.0f64;
+            let mut illiquid_total = 0.0f64;
             for s in snaps {
                 balances.insert(s.account_id, s.balance);
+                if *liquid_map.get(&s.account_id).unwrap_or(&true) {
+                    liquid_total += s.balance;
+                } else {
+                    illiquid_total += s.balance;
+                }
             }
             rows.push(SnapshotGridRow {
                 year: t.year,
                 month: t.month,
                 balances,
                 total: t.total,
+                liquid_total,
+                illiquid_total,
             });
         }
         Ok(rows)
@@ -282,6 +303,7 @@ mod tests {
                 account_type: AccountType::Bank,
                 currency: "CNY".into(),
                 initial_balance: 1000.0,
+            is_liquid: true,
             })
             .unwrap();
 
@@ -312,6 +334,7 @@ mod tests {
                 account_type: AccountType::Cash,
                 currency: "CNY".into(),
                 initial_balance: 500.0,
+            is_liquid: true,
             })
             .unwrap();
 
@@ -345,6 +368,7 @@ mod tests {
                 account_type: AccountType::Bank,
                 currency: "CNY".into(),
                 initial_balance: 0.0,
+            is_liquid: true,
             })
             .unwrap();
         let acc2 = svc
@@ -353,6 +377,7 @@ mod tests {
                 account_type: AccountType::SocialInsurance,
                 currency: "CNY".into(),
                 initial_balance: 0.0,
+            is_liquid: true,
             })
             .unwrap();
 
