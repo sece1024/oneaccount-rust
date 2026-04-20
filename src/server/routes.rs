@@ -34,5 +34,9 @@ fn api_routes(service: Arc<AppService>) -> Router {
         // Stats
         .route("/stats/monthly", get(handlers::monthly_stats))
         .route("/stats/by-category", get(handlers::category_stats))
+        // Snapshots
+        .route("/snapshots/grid", get(handlers::get_snapshot_grid))
+        .route("/snapshots/entry-items", get(handlers::get_entry_items))
+        .route("/snapshots", post(handlers::save_snapshot))
         .with_state(service)
 }

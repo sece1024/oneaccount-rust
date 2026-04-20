@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use serde::Serialize;
+
 use crate::dao::{AccountDao, CategoryDao, SnapshotDao, TransactionDao};
 use crate::db::DbPool;
 use crate::error::Result;
@@ -7,6 +9,14 @@ use crate::models::account::{Account, NewAccount};
 use crate::models::category::{Category, CategoryType, NewCategory};
 use crate::models::snapshot::{AccountSnapshot, MonthlyEntryItem, MonthlyTotal};
 use crate::models::transaction::{NewTransaction, Transaction, TransactionFilter, TransactionType};
+
+#[derive(Serialize)]
+pub struct SnapshotGridRow {
+    pub year: i32,
+    pub month: u32,
+    pub balances: std::collections::HashMap<i64, f64>,
+    pub total: f64,
+}
 
 pub struct AppService {
     pool: Arc<DbPool>,
@@ -214,6 +224,27 @@ impl AppService {
     pub fn has_snapshot(&self, year: i32, month: u32) -> Result<bool> {
         let conn = self.pool.get()?;
         SnapshotDao::has_snapshot(&conn, year, month)
+    }
+
+    /// 获取最近 N 个月所有账户快照，结构化为行列格式
+    pub fn snapshot_grid(&self, months: i64) -> Result<Vec<SnapshotGridRow>> {
+        let conn = self.pool.get()?;
+        let totals = SnapshotDao::monthly_totals(&conn, months)?;
+        let mut rows = Vec::new();
+        for t in &totals {
+            let snaps = SnapshotDao::find_month(&conn, t.year, t.month)?;
+            let mut balances = std::collections::HashMap::new();
+            for s in snaps {
+                balances.insert(s.account_id, s.balance);
+            }
+            rows.push(SnapshotGridRow {
+                year: t.year,
+                month: t.month,
+                balances,
+                total: t.total,
+            });
+        }
+        Ok(rows)
     }
 
     // ── CSV ───────────────────────────────────────────────────────────────────

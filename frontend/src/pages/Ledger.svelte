@@ -1,0 +1,317 @@
+<script lang="ts">
+  import { onMount, tick } from 'svelte'
+  import {
+    getSnapshotGrid, getEntryItems, saveSnapshot,
+    listAccounts,
+    fmtBalance,
+    type SnapshotGridRow, type EntryItem, type Account,
+  } from '../lib/api'
+
+  // ── 数据 ──────────────────────────────────────────────────────────────────
+
+  let accounts: Account[] = []
+  let entryItems: EntryItem[] = []
+  let historyRows: SnapshotGridRow[] = []
+
+  let loading = true
+  let error = ''
+  let saveMsg = ''
+
+  // 编辑行：当前正在编辑的月份
+  let editYear = new Date().getFullYear()
+  let editMonth = new Date().getMonth() + 1
+  // 每个账户的输入值（account_id -> string）
+  let editValues: Record<number, string> = {}
+
+  async function load() {
+    loading = true; error = ''
+    try {
+      ;[accounts, entryItems, historyRows] = await Promise.all([
+        listAccounts(),
+        getEntryItems(),
+        getSnapshotGrid(24),
+      ])
+      initEditRow()
+    } catch (e: any) {
+      error = e.message
+    } finally {
+      loading = false
+    }
+  }
+
+  function initEditRow() {
+    editValues = {}
+    for (const item of entryItems) {
+      // 预填上次快照余额（如有）
+      editValues[item.account_id] = item.last_balance != null ? String(item.last_balance) : ''
+    }
+    // 如果本月已有快照，则预填本月数据
+    const existing = historyRows.find(r => r.year === editYear && r.month === editMonth)
+    if (existing) {
+      for (const item of entryItems) {
+        const v = existing.balances[String(item.account_id)]
+        if (v != null) editValues[item.account_id] = String(v)
+      }
+    }
+  }
+
+  // ── 实时汇总 ──────────────────────────────────────────────────────────────
+
+  function editTotal(): number {
+    return entryItems.reduce((sum, item) => {
+      const v = parseFloat(editValues[item.account_id] ?? '')
+      return sum + (isNaN(v) ? 0 : v)
+    }, 0)
+  }
+
+  // ── 保存 ─────────────────────────────────────────────────────────────────
+
+  async function save() {
+    const balances = entryItems
+      .map(item => ({ account_id: item.account_id, balance: parseFloat(editValues[item.account_id] ?? '') }))
+      .filter(b => !isNaN(b.balance))
+    if (balances.length === 0) { error = '请至少填写一个账户余额'; return }
+    error = ''
+    try {
+      await saveSnapshot(editYear, editMonth, balances)
+      saveMsg = `✅ ${editYear}-${String(editMonth).padStart(2,'0')} 已保存`
+      setTimeout(() => saveMsg = '', 3000)
+      await load()
+      // 跳到下一个月
+      goNextMonth()
+    } catch (e: any) {
+      error = e.message
+    }
+  }
+
+  // ── 键盘导航 ─────────────────────────────────────────────────────────────
+
+  async function handleKeydown(e: KeyboardEvent, idx: number) {
+    if (e.key === 'Tab') {
+      e.preventDefault()
+      if (idx < entryItems.length - 1) {
+        await tick()
+        focusCell(idx + 1)
+      } else {
+        // 最后一列 Tab → 保存
+        await save()
+      }
+    } else if (e.key === 'Enter') {
+      e.preventDefault()
+      if (idx < entryItems.length - 1) {
+        await tick()
+        focusCell(idx + 1)
+      } else {
+        await save()
+      }
+    }
+  }
+
+  function focusCell(idx: number) {
+    const el = document.querySelector<HTMLInputElement>(`[data-cell="${idx}"]`)
+    el?.focus()
+    el?.select()
+  }
+
+  // ── 月份导航 ─────────────────────────────────────────────────────────────
+
+  function goPrevMonth() {
+    if (editMonth === 1) { editYear--; editMonth = 12 } else editMonth--
+    initEditRow()
+  }
+  function goNextMonth() {
+    const now = new Date()
+    if (editYear > now.getFullYear() || (editYear === now.getFullYear() && editMonth >= now.getMonth() + 1)) return
+    if (editMonth === 12) { editYear++; editMonth = 1 } else editMonth++
+    initEditRow()
+  }
+  const isCurrentOrFuture = () => {
+    const now = new Date()
+    return editYear > now.getFullYear() || (editYear === now.getFullYear() && editMonth >= now.getMonth() + 1)
+  }
+
+  // ── 点击历史行进入编辑 ────────────────────────────────────────────────────
+
+  function editHistoryRow(row: SnapshotGridRow) {
+    editYear = row.year
+    editMonth = row.month
+    editValues = {}
+    for (const item of entryItems) {
+      const v = row.balances[String(item.account_id)]
+      editValues[item.account_id] = v != null ? String(v) : ''
+    }
+  }
+
+  onMount(load)
+</script>
+
+<div class="ledger">
+
+  <div class="toolbar">
+    <div class="month-nav">
+      <button on:click={goPrevMonth}>‹</button>
+      <span class="month-label">编辑：{editYear}-{String(editMonth).padStart(2,'0')}</span>
+      <button on:click={goNextMonth} disabled={isCurrentOrFuture()}>›</button>
+    </div>
+    <div class="right">
+      {#if saveMsg}<span class="save-msg">{saveMsg}</span>{/if}
+      {#if error}<span class="neg">{error}</span>{/if}
+      <button class="primary" on:click={save}>保存本月</button>
+    </div>
+  </div>
+
+  {#if loading}
+    <p class="empty">加载中…</p>
+  {:else}
+    <div class="table-wrap">
+      <table class="ledger-table">
+        <thead>
+          <tr>
+            <th class="col-month">月份</th>
+            {#each entryItems as item}
+              <th class="col-account">
+                <div class="acc-name">{item.account_name}</div>
+                <div class="acc-type">{item.account_type}</div>
+              </th>
+            {/each}
+            <th class="col-total">总资产</th>
+          </tr>
+        </thead>
+        <tbody>
+
+          <!-- 编辑行 -->
+          <tr class="edit-row">
+            <td class="col-month edit-month">
+              {editYear}-{String(editMonth).padStart(2,'0')}
+              <span class="badge">编辑中</span>
+            </td>
+            {#each entryItems as item, idx}
+              <td class="col-account">
+                <input
+                  class="cell-input"
+                  class:neg-input={parseFloat(editValues[item.account_id] ?? '') < 0}
+                  data-cell={idx}
+                  type="number"
+                  step="0.01"
+                  bind:value={editValues[item.account_id]}
+                  placeholder="—"
+                  on:keydown={e => handleKeydown(e, idx)}
+                />
+              </td>
+            {/each}
+            <td class="col-total" class:pos={editTotal() >= 0} class:neg={editTotal() < 0}>
+              {fmtBalance(editTotal())}
+            </td>
+          </tr>
+
+          <!-- 历史行（最新在上） -->
+          {#each [...historyRows].reverse() as row}
+            {@const isEditing = row.year === editYear && row.month === editMonth}
+            {#if !isEditing}
+              <tr class="history-row" on:click={() => editHistoryRow(row)} title="点击重新编辑">
+                <td class="col-month">{row.year}-{String(row.month).padStart(2,'0')}</td>
+                {#each entryItems as item}
+                  {@const bal = row.balances[String(item.account_id)]}
+                  <td class="col-account" class:neg={bal != null && bal < 0} class:pos={bal != null && bal >= 0}>
+                    {#if bal != null}{fmtBalance(bal)}{:else}<span class="muted">—</span>{/if}
+                  </td>
+                {/each}
+                <td class="col-total" class:pos={row.total >= 0} class:neg={row.total < 0}>
+                  {fmtBalance(row.total)}
+                </td>
+              </tr>
+            {/if}
+          {/each}
+
+        </tbody>
+      </table>
+    </div>
+
+    <p class="hint muted">Tab / Enter 切换账户 · 最后一列 Tab 或点击「保存本月」提交 · 点击历史行可重新编辑</p>
+  {/if}
+</div>
+
+<style>
+.ledger { display: flex; flex-direction: column; gap: 12px; }
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.month-nav { display: flex; align-items: center; gap: 8px; }
+.month-nav button { padding: 4px 12px; font-size: 16px; }
+.month-label { font-size: 15px; font-weight: 600; min-width: 120px; text-align: center; }
+.right { display: flex; align-items: center; gap: 10px; }
+.save-msg { color: var(--green); font-size: 13px; }
+
+.table-wrap { overflow-x: auto; }
+
+.ledger-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+th {
+  background: var(--bg3);
+  padding: 10px 14px;
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+  position: sticky;
+  top: 0;
+}
+th.col-month { min-width: 90px; }
+th.col-account { min-width: 120px; text-align: right; }
+th.col-total { min-width: 110px; text-align: right; color: var(--cyan); }
+
+.acc-name { color: var(--text); font-size: 12px; }
+.acc-type { color: var(--muted); font-size: 11px; margin-top: 2px; }
+
+td { padding: 8px 14px; border-bottom: 1px solid var(--border); }
+td.col-account, td.col-total { text-align: right; font-variant-numeric: tabular-nums; }
+td.col-total { font-weight: 600; }
+td.col-month { color: var(--muted); font-size: 13px; white-space: nowrap; }
+
+/* 编辑行 */
+.edit-row { background: rgba(125, 211, 252, 0.05); }
+.edit-row td { border-bottom: 2px solid var(--cyan) !important; }
+.edit-month { color: var(--cyan) !important; font-weight: 600; }
+.badge {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 10px;
+  background: var(--cyan);
+  color: #0f1117;
+  border-radius: 3px;
+  padding: 1px 5px;
+  vertical-align: middle;
+}
+
+.cell-input {
+  width: 100%;
+  text-align: right;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--green);
+}
+.cell-input.neg-input { color: var(--red); }
+.cell-input:focus { border-color: var(--cyan); outline: none; }
+.cell-input::placeholder { color: var(--border); }
+
+/* 历史行 */
+.history-row { cursor: pointer; transition: background 0.1s; }
+.history-row:hover td { background: var(--bg3); }
+.history-row:last-child td { border-bottom: none; }
+
+.hint { font-size: 12px; text-align: center; padding: 4px 0; }
+</style>

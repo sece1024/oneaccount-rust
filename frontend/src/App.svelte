@@ -1,14 +1,14 @@
 <script lang="ts">
-  import Overview from './pages/Overview.svelte'
+  import Ledger from './pages/Ledger.svelte'
   import Accounts from './pages/Accounts.svelte'
   import Transactions from './pages/Transactions.svelte'
 
-  type Tab = 'overview' | 'transactions' | 'accounts'
-  let tab: Tab = 'overview'
+  type Tab = 'ledger' | 'transactions' | 'accounts'
+  let tab: Tab = 'ledger'
 
   const TABS: { id: Tab; label: string; icon: string }[] = [
-    { id: 'overview',     label: '总览',     icon: '📊' },
-    { id: 'transactions', label: '账目',     icon: '💸' },
+    { id: 'ledger',       label: '月结表格', icon: '📒' },
+    { id: 'transactions', label: '账目流水', icon: '💸' },
     { id: 'accounts',     label: '账户管理', icon: '💳' },
   ]
 </script>
@@ -34,8 +34,8 @@
   </aside>
 
   <main class="content">
-    {#if tab === 'overview'}
-      <Overview />
+    {#if tab === 'ledger'}
+      <Ledger />
     {:else if tab === 'transactions'}
       <Transactions />
     {:else if tab === 'accounts'}

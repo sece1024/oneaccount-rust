@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use crate::models::account::NewAccount;
 use crate::models::category::NewCategory;
 use crate::models::transaction::{NewTransaction, TransactionFilter, TransactionType};
-use crate::service::AppService;
+use crate::service::{AppService, SnapshotGridRow};
 
 type AppState = Arc<AppService>;
 
@@ -159,6 +159,90 @@ pub async fn monthly_stats(
             total_assets: total,
         })
         .into_response(),
+        Err(e) => internal_error(e).into_response(),
+    }
+}
+
+// ── Snapshots ─────────────────────────────────────────────────────────────────
+
+/// GET /api/v1/snapshots/grid?months=18
+#[derive(Deserialize)]
+pub struct GridQuery {
+    months: Option<i64>,
+}
+
+pub async fn get_snapshot_grid(
+    State(svc): State<AppState>,
+    Query(q): Query<GridQuery>,
+) -> impl IntoResponse {
+    let months = q.months.unwrap_or(18);
+    match svc.snapshot_grid(months) {
+        Ok(rows) => Json(rows).into_response(),
+        Err(e) => internal_error(e).into_response(),
+    }
+}
+
+/// GET /api/v1/snapshots/entry-items
+#[derive(Serialize)]
+pub struct EntryItem {
+    pub account_id: i64,
+    pub account_name: String,
+    pub account_type: String,
+    pub last_balance: Option<f64>,
+}
+
+pub async fn get_entry_items(State(svc): State<AppState>) -> impl IntoResponse {
+    match svc.build_monthly_entry_items() {
+        Ok(items) => {
+            let resp: Vec<EntryItem> = items
+                .into_iter()
+                .map(|i| EntryItem {
+                    account_id: i.account_id,
+                    account_name: i.account_name,
+                    account_type: i.account_type,
+                    last_balance: i.last_balance,
+                })
+                .collect();
+            Json(resp).into_response()
+        }
+        Err(e) => internal_error(e).into_response(),
+    }
+}
+
+/// POST /api/v1/snapshots
+#[derive(Deserialize)]
+pub struct SaveSnapshotReq {
+    pub year: i32,
+    pub month: u32,
+    pub balances: Vec<AccountBalance>,
+    pub note: Option<String>,
+}
+
+#[derive(Deserialize)]
+pub struct AccountBalance {
+    pub account_id: i64,
+    pub balance: f64,
+}
+
+pub async fn save_snapshot(
+    State(svc): State<AppState>,
+    Json(req): Json<SaveSnapshotReq>,
+) -> impl IntoResponse {
+    use crate::models::snapshot::MonthlyEntryItem;
+    let items: Vec<MonthlyEntryItem> = req
+        .balances
+        .iter()
+        .map(|b| MonthlyEntryItem {
+            account_id: b.account_id,
+            account_name: String::new(),
+            account_type: String::new(),
+            last_balance: None,
+            input: String::new(),
+            confirmed_balance: Some(b.balance),
+        })
+        .collect();
+    match svc.save_monthly_snapshot(req.year, req.month, &items, req.note.as_deref()) {
+        Ok(total) => Json(serde_json::json!({ "total": total })).into_response(),
         Err(e) => internal_error(e).into_response(),
     }
 }

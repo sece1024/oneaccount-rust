@@ -157,3 +157,32 @@ export const ACCOUNT_TYPE_LABELS: Record<string, string> = {
 }
 
 export const ACCOUNT_TYPES = Object.entries(ACCOUNT_TYPE_LABELS).map(([value, label]) => ({ value, label }))
+
+// ── Snapshots ─────────────────────────────────────────────────────────────────
+
+export interface SnapshotGridRow {
+  year: number
+  month: number
+  /** account_id (string key from JSON) -> balance */
+  balances: Record<string, number>
+  total: number
+}
+
+export interface EntryItem {
+  account_id: number
+  account_name: string
+  account_type: string
+  last_balance: number | null
+}
+
+export const getSnapshotGrid = (months = 18) =>
+  request<SnapshotGridRow[]>(`/snapshots/grid?months=${months}`)
+
+export const getEntryItems = () =>
+  request<EntryItem[]>('/snapshots/entry-items')
+
+export const saveSnapshot = (year: number, month: number, balances: { account_id: number; balance: number }[], note?: string) =>
+  request<{ total: number }>('/snapshots', {
+    method: 'POST',
+    body: JSON.stringify({ year, month, balances, note }),
+  })
