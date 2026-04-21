@@ -77,6 +77,24 @@ impl AppService {
 
     /// 原子化创建账目，同时更新相关账户余额
     pub fn create_transaction(&self, req: &NewTransaction) -> Result<Transaction> {
+        if req.amount <= 0.0 {
+            return Err(crate::error::AppError::InvalidInput(
+                "交易金额必须为正数".into(),
+            ));
+        }
+        if req.transaction_type == TransactionType::Transfer {
+            let to_id = req.to_account_id.ok_or_else(|| {
+                crate::error::AppError::InvalidInput(
+                    "转账交易必须指定目标账户".into(),
+                )
+            })?;
+            if req.account_id == to_id {
+                return Err(crate::error::AppError::InvalidInput(
+                    "转账的源账户和目标账户不能相同".into(),
+                ));
+            }
+        }
+
         let mut conn = self.pool.get()?;
         let db_tx = conn.transaction()?;
 
@@ -91,9 +109,9 @@ impl AppService {
             }
             TransactionType::Transfer => {
                 AccountDao::adjust_balance(&db_tx, req.account_id, -req.amount)?;
-                if let Some(to_id) = req.to_account_id {
-                    AccountDao::adjust_balance(&db_tx, to_id, req.amount)?;
-                }
+                // to_account_id 已在上方校验过非空
+                let to_id = req.to_account_id.unwrap();
+                AccountDao::adjust_balance(&db_tx, to_id, req.amount)?;
             }
         }
 

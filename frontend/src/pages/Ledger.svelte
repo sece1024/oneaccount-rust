@@ -53,6 +53,10 @@
     }
   }
 
+  function roundToCents(n: number): number {
+    return Math.round(n * 100) / 100
+  }
+
   // ── 实时汇总（活动 / 非活动 / 总计） ─────────────────────────────────────
 
   function editTotals(): { liquid: number; illiquid: number; total: number } {
@@ -64,7 +68,7 @@
       if (acc?.is_liquid ?? true) liquid += v
       else illiquid += v
     }
-    return { liquid, illiquid, total: liquid + illiquid }
+    return { liquid: roundToCents(liquid), illiquid: roundToCents(illiquid), total: roundToCents(liquid + illiquid) }
   }
 
   // ── 保存 ─────────────────────────────────────────────────────────────────

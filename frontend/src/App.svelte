@@ -2,12 +2,14 @@
   import Ledger from './pages/Ledger.svelte'
   import Accounts from './pages/Accounts.svelte'
   import Transactions from './pages/Transactions.svelte'
+  import Overview from './pages/Overview.svelte'
 
-  type Tab = 'ledger' | 'transactions' | 'accounts'
+  type Tab = 'ledger' | 'overview' | 'transactions' | 'accounts'
   let tab: Tab = 'ledger'
 
   const TABS: { id: Tab; label: string; icon: string }[] = [
     { id: 'ledger',       label: '月结表格', icon: '📒' },
+    { id: 'overview',     label: '统计概览', icon: '📊' },
     { id: 'transactions', label: '账目流水', icon: '💸' },
     { id: 'accounts',     label: '账户管理', icon: '💳' },
   ]
@@ -36,6 +38,8 @@
   <main class="content">
     {#if tab === 'ledger'}
       <Ledger />
+    {:else if tab === 'overview'}
+      <Overview />
     {:else if tab === 'transactions'}
       <Transactions />
     {:else if tab === 'accounts'}
