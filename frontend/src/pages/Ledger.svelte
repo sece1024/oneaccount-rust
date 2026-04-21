@@ -262,7 +262,7 @@
 .month-label { font-size: 15px; font-weight: 600; min-width: 120px; text-align: center; }
 .right { display: flex; align-items: center; gap: 10px; }
 
-.table-wrap { overflow-x: auto; }
+.table-wrap { overflow-x: auto; max-height: 70vh; overflow-y: auto; }
 
 .ledger-table {
   width: 100%;
@@ -281,6 +281,7 @@ th {
   white-space: nowrap;
   position: sticky;
   top: 0;
+  z-index: 2;
 }
 th.col-month { min-width: 90px; }
 th.col-account { min-width: 110px; text-align: right; }
@@ -301,9 +302,16 @@ td.col-illiquid { background: rgba(251,191,36,.04); }
 td.col-restricted-val { color: var(--yellow); }
 td.col-grand-val { color: var(--text); }
 
-/* 编辑行 */
+/* 编辑行 — sticky */
 .edit-row { background: rgba(125, 211, 252, 0.05); }
-.edit-row td { border-bottom: 2px solid var(--cyan) !important; }
+.edit-row td {
+  border-bottom: 2px solid var(--cyan) !important;
+  position: sticky;
+  top: 42px; /* below thead */
+  z-index: 1;
+  background: inherit;
+}
+.edit-row { background: var(--bg2); }
 .edit-month { color: var(--cyan) !important; font-weight: 600; }
 .badge {
   display: inline-block;
