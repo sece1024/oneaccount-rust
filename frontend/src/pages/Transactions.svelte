@@ -39,6 +39,7 @@
     }
   }
   let form = emptyForm()
+  let formEl: HTMLElement
 
   async function load(reset = true) {
     loading = true; error = ''
@@ -91,6 +92,7 @@
       is_large: tx.is_large,
     }
     showForm = true
+    requestAnimationFrame(() => formEl?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }))
   }
 
   function cancelForm() {
@@ -162,13 +164,14 @@
         {/each}
       </select>
     </div>
-    <button class="primary" on:click={() => { editingId = null; form = emptyForm(); showForm = !showForm }}>＋ 新增账目</button>
+    <button class="primary" on:click={() => { editingId = null; form = emptyForm(); showForm = !showForm; requestAnimationFrame(() => formEl?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })) }}>＋ 新增账目</button>
   </div>
 
   {#if error}<p class="neg" style="margin:8px 0">{error}</p>{/if}
 
   {#if showForm}
-    <div class="card form-card">
+    <div class="card form-card" class:editing={editingId} bind:this={formEl}>
+      <h3 class="form-title">{editingId ? '✏️ 编辑账目' : '➕ 新建账目'}</h3>
       <div class="form-grid" style="grid-template-columns:1fr 1fr 1fr">
         <div class="form-row">
           <label for="tx-type">类型</label>
@@ -276,6 +279,8 @@
 .filters { display: flex; gap: 8px; }
 .filters select { width: auto; }
 .form-card { margin-bottom: 0; }
+.form-card.editing { border-left: 3px solid var(--cyan); }
+.form-title { margin: 0 0 12px; font-size: 14px; font-weight: 600; color: var(--text); }
 .large-check { display: flex; align-items: center; gap: 6px; font-size: 13px; margin-right: auto; }
 .large-check input { width: auto; }
 .actions-cell { display: flex; gap: 4px; }

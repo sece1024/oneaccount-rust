@@ -14,6 +14,7 @@
   let submitting = false
 
   let form = { name: '', account_type: 'bank', currency: 'CNY', initial_balance: 0, is_liquid: true }
+  let formEl: HTMLElement
 
   async function load() {
     loading = true; error = ''
@@ -65,13 +66,13 @@
       <span class="sep">·</span>
       <span class="muted">总计 <strong class:neg={total() < 0} class:pos={total() >= 0}>{fmtBalance(total())}</strong></span>
     </div>
-    <button class="primary" on:click={() => showForm = !showForm}>＋ 新建账户</button>
+    <button class="primary" on:click={() => { showForm = !showForm; requestAnimationFrame(() => formEl?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })) }}>＋ 新建账户</button>
   </div>
 
   {#if error}<p class="neg" style="margin-bottom:8px">{error}</p>{/if}
 
   {#if showForm}
-    <div class="card form-card">
+    <div class="card form-card" bind:this={formEl}>
       <div class="form-grid" style="grid-template-columns:1fr 1fr">
         <div class="form-row">
           <label for="acc-name">账户名称</label>

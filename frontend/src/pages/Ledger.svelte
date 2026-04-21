@@ -83,7 +83,6 @@
       await saveSnapshot(editYear, editMonth, balances)
       toast.success(`${editYear}-${String(editMonth).padStart(2,'0')} 已保存`)
       await load()
-      goNextMonth()
     } catch (e: any) {
       error = e.message
       toast.error(e.message)
