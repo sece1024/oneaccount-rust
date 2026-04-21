@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import { toast } from '../lib/toast'
+  import EmptyState from '../components/EmptyState.svelte'
   import {
     listAccounts, createAccount, deleteAccount, updateAccountLiquid,
     fmtBalance, ACCOUNT_TYPES, ACCOUNT_TYPE_LABELS,
@@ -117,7 +118,13 @@
   {#if loading}
     <p class="empty">加载中…</p>
   {:else if accounts.length === 0}
-    <p class="empty">暂无账户</p>
+    <EmptyState
+      icon="🏦"
+      title="还没有账户"
+      description="先创建你的银行卡、支付宝、微信等资金账户，然后就可以在「账本」中记录每月余额了。"
+      action="＋ 创建第一个账户"
+      onAction={() => { showForm = true; requestAnimationFrame(() => formEl?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })) }}
+    />
   {:else}
     <div class="card">
       <table>

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import { monthlyStats, categoryStats, fmtBalance, type MonthlyStats, type CategoryStat } from '../lib/api'
+  import EmptyState from '../components/EmptyState.svelte'
   import { Chart, ArcElement, Tooltip, Legend, DoughnutController } from 'chart.js'
 
   Chart.register(ArcElement, Tooltip, Legend, DoughnutController)
@@ -75,6 +76,13 @@
   {:else if error}
     <p class="empty neg">{error}</p>
   {:else if stats}
+    {#if stats.total_assets === 0 && stats.income === 0 && stats.expense === 0}
+      <EmptyState
+        icon="📊"
+        title="暂无统计数据"
+        description="在「账本」页面填写每月余额，或在「账目」页面记录收支，这里会自动生成统计。"
+      />
+    {:else}
     <div class="stat-grid">
       <div class="card stat">
         <div class="label">总资产</div>
@@ -101,6 +109,7 @@
           <canvas bind:this={chartCanvas}></canvas>
         </div>
       </div>
+    {/if}
     {/if}
   {/if}
 </div>

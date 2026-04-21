@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte'
   import { toast } from '../lib/toast'
+  import EmptyState from '../components/EmptyState.svelte'
   import {
     getSnapshotGrid, getEntryItems, saveSnapshot,
     listAccounts,
@@ -162,6 +163,12 @@
 
   {#if loading}
     <p class="empty">加载中…</p>
+  {:else if accounts.length === 0}
+    <EmptyState
+      icon="📒"
+      title="还没有账户"
+      description="请先到「账户管理」页面创建账户，然后就可以在这里像填表格一样记录每月余额了。"
+    />
   {:else}
     <div class="table-wrap">
       <table class="ledger-table">

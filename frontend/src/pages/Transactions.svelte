@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import { toast } from '../lib/toast'
+  import EmptyState from '../components/EmptyState.svelte'
   import {
     listTransactions, createTransaction, updateTransaction, deleteTransaction,
     listAccounts, listCategories,
@@ -239,7 +240,21 @@
   {#if loading}
     <p class="empty">加载中…</p>
   {:else if txs.length === 0}
-    <p class="empty">暂无账目</p>
+    {#if accounts.length === 0}
+      <EmptyState
+        icon="📋"
+        title="还没有账目"
+        description="请先到「账户管理」页面创建账户，然后再来记录收支。"
+      />
+    {:else}
+      <EmptyState
+        icon="📋"
+        title="还没有账目"
+        description="点击上方「新增账目」按钮，开始记录你的收入和支出。"
+        action="＋ 新增账目"
+        onAction={() => { editingId = null; form = emptyForm(); showForm = true; requestAnimationFrame(() => formEl?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })) }}
+      />
+    {/if}
   {:else}
     <div class="card">
       <table>
