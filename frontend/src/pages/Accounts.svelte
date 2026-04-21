@@ -57,6 +57,29 @@
   const illiquidTotal = () => accounts.filter(a => !a.is_liquid).reduce((s, a) => s + a.balance, 0)
   const total = () => accounts.reduce((s, a) => s + a.balance, 0)
 
+  type SortKey = 'name' | 'account_type' | 'balance' | 'is_liquid'
+  let sortKey: SortKey = 'name'
+  let sortAsc = true
+
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) sortAsc = !sortAsc
+    else { sortKey = key; sortAsc = true }
+  }
+
+  $: sortedAccounts = [...accounts].sort((a, b) => {
+    let cmp = 0
+    if (sortKey === 'name') cmp = a.name.localeCompare(b.name)
+    else if (sortKey === 'account_type') cmp = a.account_type.localeCompare(b.account_type)
+    else if (sortKey === 'balance') cmp = a.balance - b.balance
+    else if (sortKey === 'is_liquid') cmp = (a.is_liquid === b.is_liquid ? 0 : a.is_liquid ? -1 : 1)
+    return sortAsc ? cmp : -cmp
+  })
+
+  function sortIcon(key: SortKey) {
+    if (sortKey !== key) return '↕'
+    return sortAsc ? '↑' : '↓'
+  }
+
   onMount(load)
 </script>
 
@@ -131,10 +154,17 @@
     <div class="card">
       <table>
         <thead>
-          <tr><th>账户名</th><th>账户类型</th><th>资金类型</th><th>货币</th><th>余额</th><th></th></tr>
+          <tr>
+            <th class="sortable" on:click={() => toggleSort('name')}>账户名 {sortIcon('name')}</th>
+            <th class="sortable" on:click={() => toggleSort('account_type')}>账户类型 {sortIcon('account_type')}</th>
+            <th class="sortable" on:click={() => toggleSort('is_liquid')}>资金类型 {sortIcon('is_liquid')}</th>
+            <th>货币</th>
+            <th class="sortable" on:click={() => toggleSort('balance')}>余额 {sortIcon('balance')}</th>
+            <th></th>
+          </tr>
         </thead>
         <tbody>
-          {#each accounts as acc}
+          {#each sortedAccounts as acc}
             <tr>
               <td>{acc.name}</td>
               <td>{ACCOUNT_TYPE_LABELS[acc.account_type] ?? acc.account_type}</td>
@@ -166,6 +196,8 @@
 
 <style>
 .toolbar { display: flex; justify-content: space-between; align-items: center; }
+.sortable { cursor: pointer; user-select: none; }
+.sortable:hover { color: var(--cyan); }
 .totals { display: flex; align-items: center; gap: 8px; font-size: 13px; }
 .sep { color: var(--border); }
 .yellow { color: var(--yellow); }
