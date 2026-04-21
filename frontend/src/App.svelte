@@ -160,4 +160,42 @@
 .summary-label { font-size: 11px; color: var(--muted); }
 .summary-val { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .summary-val.liquid { color: var(--cyan); }
+
+/* ── Mobile: bottom tab bar ────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .layout { flex-direction: column; }
+  .sidebar {
+    width: 100%;
+    flex-direction: row;
+    align-items: center;
+    padding: 0;
+    gap: 0;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    z-index: 100;
+    order: 2;
+  }
+  .brand { display: none; }
+  .sidebar-footer { display: none; }
+  .asset-summary { display: none; }
+  nav { display: flex; width: 100%; }
+  .nav-item {
+    flex: 1;
+    justify-content: center;
+    padding: 10px 4px;
+    font-size: 11px;
+    flex-direction: column;
+    gap: 2px;
+    text-align: center;
+  }
+  .nav-item.active { border-left: none; border-top: 2px solid var(--cyan); }
+  .icon { font-size: 18px; }
+  .content {
+    padding: 16px;
+    padding-bottom: 72px; /* space for bottom bar */
+  }
+}
 </style>

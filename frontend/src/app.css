@@ -90,3 +90,10 @@ tr:hover td { background: var(--bg3); }
 .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
 
 .empty { text-align: center; color: var(--muted); padding: 40px; }
+
+/* ── Responsive ─────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .form-grid { grid-template-columns: 1fr !important; }
+  th, td { padding: 6px 8px; font-size: 12px; }
+  .card { padding: 12px; }
+}
