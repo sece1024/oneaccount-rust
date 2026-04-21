@@ -2,6 +2,7 @@
   import { onMount } from 'svelte'
   import { toast } from '../lib/toast'
   import EmptyState from '../components/EmptyState.svelte'
+  import { confirm } from '../lib/confirm'
   import {
     listTransactions, createTransaction, updateTransaction, deleteTransaction,
     listAccounts, listCategories,
@@ -133,7 +134,8 @@
   }
 
   async function del(id: number) {
-    if (!confirm('确认删除这条账目？')) return
+    const ok = await confirm({ message: '确认删除这条账目？删除后不可恢复。', confirmText: '删除' })
+    if (!ok) return
     try { await deleteTransaction(id); toast.success('已删除'); await load() }
     catch (e: any) { error = e.message; toast.error(e.message) }
   }

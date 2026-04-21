@@ -2,6 +2,7 @@
   import { onMount } from 'svelte'
   import { toast } from '../lib/toast'
   import EmptyState from '../components/EmptyState.svelte'
+  import { confirm } from '../lib/confirm'
   import {
     listAccounts, createAccount, deleteAccount, updateAccountLiquid,
     fmtBalance, ACCOUNT_TYPES, ACCOUNT_TYPE_LABELS,
@@ -38,7 +39,8 @@
   }
 
   async function del(id: number, name: string) {
-    if (!confirm(`确认删除账户「${name}」？`)) return
+    const ok = await confirm({ message: `确认删除账户「${name}」？关联的快照数据也将丢失。`, confirmText: '删除' })
+    if (!ok) return
     try { await deleteAccount(id); toast.success('账户已删除'); await load() }
     catch (e: any) { error = e.message; toast.error(e.message) }
   }

@@ -5,6 +5,7 @@
   import Transactions from './pages/Transactions.svelte'
   import Overview from './pages/Overview.svelte'
   import Toast from './components/Toast.svelte'
+  import ConfirmDialog from './components/ConfirmDialog.svelte'
 
   type Tab = 'ledger' | 'overview' | 'transactions' | 'accounts'
 
@@ -35,6 +36,7 @@
 </script>
 
 <Toast />
+<ConfirmDialog />
 <div class="layout">
   <aside class="sidebar">
     <div class="brand">OneAccount</div>
