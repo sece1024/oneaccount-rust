@@ -149,7 +149,8 @@ export const categoryStats = (start_date?: string, end_date?: string) => {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 export function fmtBalance(b: number): string {
-  return b < 0 ? `-¥${Math.abs(b).toFixed(2)}` : `¥${b.toFixed(2)}`
+  const abs = Math.abs(b).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  return b < 0 ? `-¥${abs}` : `¥${abs}`
 }
 
 export const ACCOUNT_TYPE_LABELS: Record<string, string> = {
