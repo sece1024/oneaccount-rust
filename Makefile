@@ -27,6 +27,14 @@ dev-frontend:
 build-frontend:
 	cd frontend && npm run build
 
+# 同时启动后端（8080）+ 前端 dev server，Ctrl-C 可一并停止
+.PHONY: dev
+dev:
+	@trap 'kill 0' INT; \
+	cargo run -- server --port 8080 & \
+	cd frontend && npm run dev & \
+	wait
+
 # ── 测试 ───────────────────────────────────────────────────────────────────────
 
 .PHONY: test
@@ -123,7 +131,9 @@ help:
 	@echo "  make build           本机构建（release）"
 	@echo "  make test            运行所有测试"
 	@echo "  make run-tui         启动 TUI 界面"
-	@echo "  make run-server      启动 HTTP 服务"
+	@echo "  make run-server      启动 HTTP 服务
+  make dev             同时启动后端 + 前端（Ctrl-C 一并停止）
+  make dev-frontend    仅启动前端 dev server"
 	@echo "  make build-rpi-arm64 交叉编译到树莓派 64-bit"
 	@echo "  make build-rpi-armv7 交叉编译到树莓派 32-bit"
 	@echo "  make build-all       编译所有平台"
