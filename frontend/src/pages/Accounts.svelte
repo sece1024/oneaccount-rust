@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte'
+  import { toast } from '../lib/toast'
   import {
     listAccounts, createAccount, deleteAccount, updateAccountLiquid,
     fmtBalance, ACCOUNT_TYPES, ACCOUNT_TYPE_LABELS,
@@ -28,6 +29,7 @@
       await createAccount({ ...form })
       showForm = false
       form = { name: '', account_type: 'bank', currency: 'CNY', initial_balance: 0, is_liquid: true }
+      toast.success('账户已创建')
       await load()
     } catch (e: any) { error = e.message }
     finally { submitting = false }
@@ -35,15 +37,16 @@
 
   async function del(id: number, name: string) {
     if (!confirm(`确认删除账户「${name}」？`)) return
-    try { await deleteAccount(id); await load() }
-    catch (e: any) { error = e.message }
+    try { await deleteAccount(id); toast.success('账户已删除'); await load() }
+    catch (e: any) { error = e.message; toast.error(e.message) }
   }
 
   async function toggleLiquid(acc: Account) {
     try {
       await updateAccountLiquid(acc.id, !acc.is_liquid)
+      toast.success(`已切换为${!acc.is_liquid ? '活动' : '非活动'}资金`)
       await load()
-    } catch (e: any) { error = e.message }
+    } catch (e: any) { error = e.message; toast.error(e.message) }
   }
 
   const liquidTotal = () => accounts.filter(a => a.is_liquid).reduce((s, a) => s + a.balance, 0)

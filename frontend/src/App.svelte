@@ -4,6 +4,7 @@
   import Accounts from './pages/Accounts.svelte'
   import Transactions from './pages/Transactions.svelte'
   import Overview from './pages/Overview.svelte'
+  import Toast from './components/Toast.svelte'
 
   type Tab = 'ledger' | 'overview' | 'transactions' | 'accounts'
 
@@ -33,6 +34,7 @@
   })
 </script>
 
+<Toast />
 <div class="layout">
   <aside class="sidebar">
     <div class="brand">OneAccount</div>

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte'
+  import { toast } from '../lib/toast'
   import {
     getSnapshotGrid, getEntryItems, saveSnapshot,
     listAccounts,
@@ -15,7 +16,6 @@
 
   let loading = true
   let error = ''
-  let saveMsg = ''
 
   // 编辑行：当前正在编辑的月份
   let editYear = new Date().getFullYear()
@@ -81,12 +81,12 @@
     error = ''
     try {
       await saveSnapshot(editYear, editMonth, balances)
-      saveMsg = `✅ ${editYear}-${String(editMonth).padStart(2,'0')} 已保存`
-      setTimeout(() => saveMsg = '', 3000)
+      toast.success(`${editYear}-${String(editMonth).padStart(2,'0')} 已保存`)
       await load()
       goNextMonth()
     } catch (e: any) {
       error = e.message
+      toast.error(e.message)
     }
   }
 
@@ -156,7 +156,6 @@
       <button on:click={goNextMonth} disabled={isCurrentOrFuture()}>›</button>
     </div>
     <div class="right">
-      {#if saveMsg}<span class="save-msg">{saveMsg}</span>{/if}
       {#if error}<span class="neg">{error}</span>{/if}
       <button class="primary" on:click={save}>保存本月</button>
     </div>
@@ -256,7 +255,6 @@
 .month-nav button { padding: 4px 12px; font-size: 16px; }
 .month-label { font-size: 15px; font-weight: 600; min-width: 120px; text-align: center; }
 .right { display: flex; align-items: center; gap: 10px; }
-.save-msg { color: var(--green); font-size: 13px; }
 
 .table-wrap { overflow-x: auto; }
 

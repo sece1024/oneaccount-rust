@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte'
+  import { toast } from '../lib/toast'
   import {
     listTransactions, createTransaction, updateTransaction, deleteTransaction,
     listAccounts, listCategories,
@@ -117,19 +118,21 @@
       }
       if (editingId) {
         await updateTransaction(editingId, data)
+        toast.success('账目已更新')
       } else {
         await createTransaction(data)
+        toast.success('账目已创建')
       }
       cancelForm()
       await load()
-    } catch (e: any) { error = e.message }
+    } catch (e: any) { error = e.message; toast.error(e.message) }
     finally { submitting = false }
   }
 
   async function del(id: number) {
     if (!confirm('确认删除这条账目？')) return
-    try { await deleteTransaction(id); await load() }
-    catch (e: any) { error = e.message }
+    try { await deleteTransaction(id); toast.success('已删除'); await load() }
+    catch (e: any) { error = e.message; toast.error(e.message) }
   }
 
   const expenseCategories = () => categories.filter(c => c.category_type === 'expense')
