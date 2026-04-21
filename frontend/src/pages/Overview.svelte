@@ -1,10 +1,19 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { monthlyStats, categoryStats, fmtBalance, type MonthlyStats, type CategoryStat } from '../lib/api'
+  import {
+    monthlyStats, categoryStats, getSnapshotGrid, fmtBalance,
+    type MonthlyStats, type CategoryStat, type SnapshotGridRow,
+  } from '../lib/api'
   import EmptyState from '../components/EmptyState.svelte'
-  import { Chart, ArcElement, Tooltip, Legend, DoughnutController } from 'chart.js'
+  import {
+    Chart, ArcElement, Tooltip, Legend, DoughnutController,
+    LineElement, PointElement, CategoryScale, LinearScale, LineController, Filler,
+  } from 'chart.js'
 
-  Chart.register(ArcElement, Tooltip, Legend, DoughnutController)
+  Chart.register(
+    ArcElement, Tooltip, Legend, DoughnutController,
+    LineElement, PointElement, CategoryScale, LinearScale, LineController, Filler,
+  )
 
   const now = new Date()
   let year = now.getFullYear()
@@ -12,21 +21,26 @@
 
   let stats: MonthlyStats | null = null
   let catStats: CategoryStat[] = []
+  let trendRows: SnapshotGridRow[] = []
   let loading = true
   let error = ''
   let chartCanvas: HTMLCanvasElement
   let chart: Chart | null = null
+  let trendCanvas: HTMLCanvasElement
+  let trendChart: Chart | null = null
 
   async function load() {
     loading = true; error = ''
     try {
       const start = `${year}-${String(month).padStart(2,'0')}-01`
       const end = `${year}-${String(month).padStart(2,'0')}-31`
-      ;[stats, catStats] = await Promise.all([
+      ;[stats, catStats, trendRows] = await Promise.all([
         monthlyStats(year, month),
         categoryStats(start, end),
+        getSnapshotGrid(12),
       ])
       renderChart()
+      renderTrend()
     } catch (e: any) {
       error = e.message
     } finally {
@@ -47,6 +61,60 @@
       options: {
         plugins: { legend: { position: 'right', labels: { color: '#7c7f9e', font: { size: 12 } } } },
         cutout: '65%',
+      },
+    })
+  }
+
+  function renderTrend() {
+    if (!trendCanvas || trendRows.length === 0) return
+    trendChart?.destroy()
+    const sorted = [...trendRows].sort((a, b) => a.year - b.year || a.month - b.month)
+    const labels = sorted.map(r => `${r.year}-${String(r.month).padStart(2,'0')}`)
+    trendChart = new Chart(trendCanvas, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [
+          {
+            label: '总资产',
+            data: sorted.map(r => r.total),
+            borderColor: '#4ade80',
+            backgroundColor: 'rgba(74,222,128,.1)',
+            fill: true,
+            tension: 0.3,
+            pointRadius: 3,
+          },
+          {
+            label: '活动资金',
+            data: sorted.map(r => r.liquid_total),
+            borderColor: '#7dd3fc',
+            tension: 0.3,
+            pointRadius: 3,
+          },
+          {
+            label: '非活动资金',
+            data: sorted.map(r => r.illiquid_total),
+            borderColor: '#fbbf24',
+            tension: 0.3,
+            pointRadius: 3,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        interaction: { mode: 'index', intersect: false },
+        scales: {
+          x: { ticks: { color: '#7c7f9e', font: { size: 11 } }, grid: { color: 'rgba(255,255,255,.06)' } },
+          y: { ticks: { color: '#7c7f9e', font: { size: 11 } }, grid: { color: 'rgba(255,255,255,.06)' } },
+        },
+        plugins: {
+          legend: { labels: { color: '#7c7f9e', font: { size: 12 } } },
+          tooltip: {
+            callbacks: {
+              label: (ctx: any) => `${ctx.dataset.label}: ¥${ctx.parsed.y?.toFixed(2) ?? '0.00'}`,
+            },
+          },
+        },
       },
     })
   }
@@ -110,6 +178,15 @@
         </div>
       </div>
     {/if}
+
+    {#if trendRows.length > 0}
+      <div class="card chart-card">
+        <div class="card-title">资产趋势（近12个月）</div>
+        <div class="trend-wrap">
+          <canvas bind:this={trendCanvas}></canvas>
+        </div>
+      </div>
+    {/if}
     {/if}
   {/if}
 </div>
@@ -123,4 +200,5 @@
 .stat .val { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .chart-card .card-title { font-size: 13px; color: var(--muted); margin-bottom: 12px; }
 .chart-wrap { max-width: 420px; margin: 0 auto; }
+.trend-wrap { max-width: 700px; }
 </style>
