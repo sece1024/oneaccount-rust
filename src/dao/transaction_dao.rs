@@ -116,6 +116,30 @@ impl TransactionDao {
         Ok(())
     }
 
+    pub fn update(conn: &Connection, id: i64, req: &NewTransaction) -> Result<Transaction> {
+        let now = chrono::Local::now().to_rfc3339();
+        conn.execute(
+            "UPDATE transactions SET
+                 amount = ?1, transaction_type = ?2, category_id = ?3,
+                 account_id = ?4, to_account_id = ?5, date = ?6,
+                 note = ?7, is_large = ?8, updated_at = ?9
+             WHERE id = ?10",
+            params![
+                req.amount,
+                req.transaction_type.to_string(),
+                req.category_id,
+                req.account_id,
+                req.to_account_id,
+                req.date,
+                req.note,
+                req.is_large as i64,
+                now,
+                id,
+            ],
+        )?;
+        Self::find_by_id(conn, id)?.ok_or_else(|| AppError::NotFound("Transaction".into()))
+    }
+
     /// 月度收支汇总，返回 (income, expense)
     pub fn monthly_summary(conn: &Connection, year: i32, month: u32) -> Result<(f64, f64)> {
         let start = format!("{year:04}-{month:02}-01");

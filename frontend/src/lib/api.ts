@@ -124,6 +124,9 @@ export const listTransactions = (filter: TxFilter = {}) => {
 export const createTransaction = (data: NewTransaction) =>
   request<Transaction>('/transactions', { method: 'POST', body: JSON.stringify(data) })
 
+export const updateTransaction = (id: number, data: NewTransaction) =>
+  request<Transaction>(`/transactions/${id}`, { method: 'PUT', body: JSON.stringify(data) })
+
 export const deleteTransaction = (id: number) =>
   request<void>(`/transactions/${id}`, { method: 'DELETE' })
 

@@ -105,6 +105,25 @@ impl SnapshotDao {
         )?;
         Ok(count > 0)
     }
+
+    /// 批量获取最近 N 个月的所有快照（单次查询，避免 N+1）
+    pub fn find_recent_months(conn: &Connection, limit: i64) -> Result<Vec<AccountSnapshot>> {
+        let mut stmt = conn.prepare(
+            "SELECT bs.id, bs.year, bs.month, bs.account_id,
+                    a.name, a.account_type, bs.balance, bs.note, bs.created_at
+             FROM balance_snapshots bs
+             JOIN accounts a ON bs.account_id = a.id
+             WHERE (bs.year, bs.month) IN (
+                 SELECT year, month FROM balance_snapshots
+                 GROUP BY year, month
+                 ORDER BY year DESC, month DESC
+                 LIMIT ?1
+             )
+             ORDER BY bs.year ASC, bs.month ASC, a.name",
+        )?;
+        let rows = stmt.query_map(params![limit], map_row)?;
+        Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+    }
 }
 
 #[cfg(test)]

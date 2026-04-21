@@ -1,11 +1,11 @@
 <script lang="ts">
+  import { onMount } from 'svelte'
   import Ledger from './pages/Ledger.svelte'
   import Accounts from './pages/Accounts.svelte'
   import Transactions from './pages/Transactions.svelte'
   import Overview from './pages/Overview.svelte'
 
   type Tab = 'ledger' | 'overview' | 'transactions' | 'accounts'
-  let tab: Tab = 'ledger'
 
   const TABS: { id: Tab; label: string; icon: string }[] = [
     { id: 'ledger',       label: '月结表格', icon: '📒' },
@@ -13,6 +13,24 @@
     { id: 'transactions', label: '账目流水', icon: '💸' },
     { id: 'accounts',     label: '账户管理', icon: '💳' },
   ]
+
+  function tabFromHash(): Tab {
+    const h = location.hash.replace('#/', '').replace('#', '')
+    return TABS.find(t => t.id === h)?.id ?? 'ledger'
+  }
+
+  let tab: Tab = tabFromHash()
+
+  function navigate(id: Tab) {
+    tab = id
+    location.hash = '#/' + id
+  }
+
+  onMount(() => {
+    const onHash = () => { tab = tabFromHash() }
+    window.addEventListener('hashchange', onHash)
+    return () => window.removeEventListener('hashchange', onHash)
+  })
 </script>
 
 <div class="layout">
@@ -23,7 +41,7 @@
         <button
           class="nav-item"
           class:active={tab === t.id}
-          on:click={() => tab = t.id}
+          on:click={() => navigate(t.id)}
         >
           <span class="icon">{t.icon}</span>
           {t.label}

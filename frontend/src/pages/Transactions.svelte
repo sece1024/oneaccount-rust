@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import {
-    listTransactions, createTransaction, deleteTransaction,
+    listTransactions, createTransaction, updateTransaction, deleteTransaction,
     listAccounts, listCategories,
     fmtBalance,
     type Transaction, type Account, type Category,
@@ -14,36 +14,89 @@
   let error = ''
   let showForm = false
   let submitting = false
+  let editingId: number | null = null
 
   // filters
   let filterType = ''
   let filterAccount = ''
 
-  let form = {
-    amount: '',
-    transaction_type: 'expense' as 'income' | 'expense' | 'transfer',
-    category_id: '' as any,
-    account_id: '' as any,
-    to_account_id: '' as any,
-    date: new Date().toISOString().slice(0, 10),
-    note: '',
-    is_large: false,
-  }
+  // pagination
+  const PAGE_SIZE = 50
+  let offset = 0
+  let hasMore = false
 
-  async function load() {
+  function emptyForm() {
+    return {
+      amount: '',
+      transaction_type: 'expense' as 'income' | 'expense' | 'transfer',
+      category_id: '' as any,
+      account_id: '' as any,
+      to_account_id: '' as any,
+      date: new Date().toISOString().slice(0, 10),
+      note: '',
+      is_large: false,
+    }
+  }
+  let form = emptyForm()
+
+  async function load(reset = true) {
     loading = true; error = ''
+    if (reset) offset = 0
     try {
-      ;[txs, accounts, categories] = await Promise.all([
+      const [loaded, accs, cats] = await Promise.all([
         listTransactions({
           tx_type: filterType || undefined,
           account_id: filterAccount ? Number(filterAccount) : undefined,
-          limit: 100,
+          limit: PAGE_SIZE + 1,
+          offset,
         }),
         listAccounts(),
         listCategories(),
       ])
+      hasMore = loaded.length > PAGE_SIZE
+      txs = loaded.slice(0, PAGE_SIZE)
+      accounts = accs
+      categories = cats
     } catch (e: any) { error = e.message }
     finally { loading = false }
+  }
+
+  async function loadMore() {
+    offset += PAGE_SIZE
+    loading = true; error = ''
+    try {
+      const loaded = await listTransactions({
+        tx_type: filterType || undefined,
+        account_id: filterAccount ? Number(filterAccount) : undefined,
+        limit: PAGE_SIZE + 1,
+        offset,
+      })
+      hasMore = loaded.length > PAGE_SIZE
+      txs = [...txs, ...loaded.slice(0, PAGE_SIZE)]
+    } catch (e: any) { error = e.message }
+    finally { loading = false }
+  }
+
+  function startEdit(tx: Transaction) {
+    editingId = tx.id
+    form = {
+      amount: String(tx.amount),
+      transaction_type: tx.transaction_type,
+      category_id: tx.category_id ?? '',
+      account_id: tx.account_id,
+      to_account_id: tx.to_account_id ?? '',
+      date: tx.date,
+      note: tx.note ?? '',
+      is_large: tx.is_large,
+    }
+    showForm = true
+  }
+
+  function cancelForm() {
+    showForm = false
+    editingId = null
+    form = emptyForm()
+    error = ''
   }
 
   async function submit() {
@@ -52,7 +105,7 @@
     if (!form.account_id) { error = '请选择账户'; return }
     submitting = true; error = ''
     try {
-      await createTransaction({
+      const data = {
         amount,
         transaction_type: form.transaction_type,
         category_id: form.category_id ? Number(form.category_id) : null,
@@ -61,9 +114,13 @@
         date: form.date,
         note: form.note || null,
         is_large: form.is_large,
-      })
-      showForm = false
-      form = { amount: '', transaction_type: 'expense', category_id: '', account_id: '', to_account_id: '', date: new Date().toISOString().slice(0,10), note: '', is_large: false }
+      }
+      if (editingId) {
+        await updateTransaction(editingId, data)
+      } else {
+        await createTransaction(data)
+      }
+      cancelForm()
       await load()
     } catch (e: any) { error = e.message }
     finally { submitting = false }
@@ -102,7 +159,7 @@
         {/each}
       </select>
     </div>
-    <button class="primary" on:click={() => showForm = !showForm}>＋ 新增账目</button>
+    <button class="primary" on:click={() => { editingId = null; form = emptyForm(); showForm = !showForm }}>＋ 新增账目</button>
   </div>
 
   {#if error}<p class="neg" style="margin:8px 0">{error}</p>{/if}
@@ -165,9 +222,9 @@
         <label class="large-check">
           <input type="checkbox" bind:checked={form.is_large} /> 标记大额
         </label>
-        <button on:click={() => { showForm = false; error = '' }}>取消</button>
+        <button on:click={cancelForm}>取消</button>
         <button class="primary" disabled={submitting} on:click={submit}>
-          {submitting ? '提交中…' : '提交'}
+          {submitting ? '提交中…' : editingId ? '保存修改' : '提交'}
         </button>
       </div>
     </div>
@@ -194,12 +251,20 @@
                 {tx.transaction_type === 'expense' ? '-' : tx.transaction_type === 'income' ? '+' : ''}{fmtBalance(tx.amount)}
               </td>
               <td class="muted">{tx.note ?? ''}{tx.is_large ? ' 🔴' : ''}</td>
-              <td><button class="danger" on:click={() => del(tx.id)}>删除</button></td>
+              <td class="actions-cell">
+                <button on:click={() => startEdit(tx)}>编辑</button>
+                <button class="danger" on:click={() => del(tx.id)}>删除</button>
+              </td>
             </tr>
           {/each}
         </tbody>
       </table>
     </div>
+    {#if hasMore}
+      <button class="load-more" on:click={loadMore} disabled={loading}>
+        {loading ? '加载中…' : '加载更多'}
+      </button>
+    {/if}
   {/if}
 </div>
 
@@ -210,4 +275,16 @@
 .form-card { margin-bottom: 0; }
 .large-check { display: flex; align-items: center; gap: 6px; font-size: 13px; margin-right: auto; }
 .large-check input { width: auto; }
+.actions-cell { display: flex; gap: 4px; }
+.load-more {
+  display: block;
+  margin: 12px auto;
+  padding: 8px 24px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.load-more:hover { background: var(--bg2); }
 </style>

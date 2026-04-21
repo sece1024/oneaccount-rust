@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
 use axum::Router;
-use tower_http::cors::CorsLayer;
+use tower_http::cors::{CorsLayer, Any};
+use axum::http::Method;
 
 use crate::db::DbPool;
 use crate::service::AppService;
@@ -11,13 +12,18 @@ use super::handlers;
 pub fn build_router(pool: Arc<DbPool>) -> Router {
     let service = Arc::new(AppService::new(pool));
 
+    let cors = CorsLayer::new()
+        .allow_origin(Any)
+        .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE])
+        .allow_headers(Any);
+
     Router::new()
         .nest("/api/v1", api_routes(service))
-        .layer(CorsLayer::permissive())
+        .layer(cors)
 }
 
 fn api_routes(service: Arc<AppService>) -> Router {
-    use axum::routing::{delete, get, post};
+    use axum::routing::{delete, get, post, put};
 
     Router::new()
         // Accounts
@@ -31,7 +37,7 @@ fn api_routes(service: Arc<AppService>) -> Router {
             "/transactions",
             get(handlers::list_transactions).post(handlers::create_transaction),
         )
-        .route("/transactions/:id", delete(handlers::delete_transaction))
+        .route("/transactions/:id", put(handlers::update_transaction).delete(handlers::delete_transaction))
         // Stats
         .route("/stats/monthly", get(handlers::monthly_stats))
         .route("/stats/by-category", get(handlers::category_stats))

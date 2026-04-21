@@ -146,6 +146,66 @@ impl AppService {
         Ok(())
     }
 
+    /// 原子化更新账目：先回滚旧余额变动，再应用新的
+    pub fn update_transaction(&self, id: i64, req: &NewTransaction) -> Result<Transaction> {
+        if req.amount <= 0.0 {
+            return Err(crate::error::AppError::InvalidInput(
+                "交易金额必须为正数".into(),
+            ));
+        }
+        if req.transaction_type == TransactionType::Transfer {
+            let to_id = req.to_account_id.ok_or_else(|| {
+                crate::error::AppError::InvalidInput("转账交易必须指定目标账户".into())
+            })?;
+            if req.account_id == to_id {
+                return Err(crate::error::AppError::InvalidInput(
+                    "转账的源账户和目标账户不能相同".into(),
+                ));
+            }
+        }
+
+        let mut conn = self.pool.get()?;
+        let db_tx = conn.transaction()?;
+
+        let old = TransactionDao::find_by_id(&db_tx, id)?
+            .ok_or_else(|| crate::error::AppError::NotFound("Transaction".into()))?;
+
+        // 回滚旧交易的余额影响
+        match old.transaction_type {
+            TransactionType::Expense => {
+                AccountDao::adjust_balance(&db_tx, old.account_id, old.amount)?;
+            }
+            TransactionType::Income => {
+                AccountDao::adjust_balance(&db_tx, old.account_id, -old.amount)?;
+            }
+            TransactionType::Transfer => {
+                AccountDao::adjust_balance(&db_tx, old.account_id, old.amount)?;
+                if let Some(to_id) = old.to_account_id {
+                    AccountDao::adjust_balance(&db_tx, to_id, -old.amount)?;
+                }
+            }
+        }
+
+        // 应用新交易的余额影响
+        match req.transaction_type {
+            TransactionType::Expense => {
+                AccountDao::adjust_balance(&db_tx, req.account_id, -req.amount)?;
+            }
+            TransactionType::Income => {
+                AccountDao::adjust_balance(&db_tx, req.account_id, req.amount)?;
+            }
+            TransactionType::Transfer => {
+                AccountDao::adjust_balance(&db_tx, req.account_id, -req.amount)?;
+                let to_id = req.to_account_id.unwrap();
+                AccountDao::adjust_balance(&db_tx, to_id, req.amount)?;
+            }
+        }
+
+        let updated = TransactionDao::update(&db_tx, id, req)?;
+        db_tx.commit()?;
+        Ok(updated)
+    }
+
     pub fn list_transactions(&self, filter: &TransactionFilter) -> Result<Vec<Transaction>> {
         let conn = self.pool.get()?;
         TransactionDao::find_with_filter(&conn, filter)
@@ -255,32 +315,50 @@ impl AppService {
     pub fn snapshot_grid(&self, months: i64) -> Result<Vec<SnapshotGridRow>> {
         let conn = self.pool.get()?;
         let accounts = AccountDao::find_all(&conn)?;
-        // 建立 account_id -> is_liquid 映射
         let liquid_map: std::collections::HashMap<i64, bool> =
             accounts.iter().map(|a| (a.id, a.is_liquid)).collect();
 
-        let totals = SnapshotDao::monthly_totals(&conn, months)?;
-        let mut rows = Vec::new();
-        for t in &totals {
-            let snaps = SnapshotDao::find_month(&conn, t.year, t.month)?;
-            let mut balances = std::collections::HashMap::new();
-            let mut liquid_total = 0.0f64;
-            let mut illiquid_total = 0.0f64;
-            for s in snaps {
-                balances.insert(s.account_id, s.balance);
-                if *liquid_map.get(&s.account_id).unwrap_or(&true) {
-                    liquid_total += s.balance;
-                } else {
-                    illiquid_total += s.balance;
+        // 单次查询获取所有快照，按 (year, month) 分组
+        let all_snaps = SnapshotDao::find_recent_months(&conn, months)?;
+
+        let mut rows: Vec<SnapshotGridRow> = Vec::new();
+        let mut current_key: Option<(i32, u32)> = None;
+        let mut balances = std::collections::HashMap::new();
+        let mut liquid_total = 0.0f64;
+        let mut illiquid_total = 0.0f64;
+
+        for s in &all_snaps {
+            let key = (s.year, s.month);
+            if current_key != Some(key) {
+                if let Some((y, m)) = current_key {
+                    rows.push(SnapshotGridRow {
+                        year: y,
+                        month: m,
+                        total: liquid_total + illiquid_total,
+                        liquid_total,
+                        illiquid_total,
+                        balances: std::mem::take(&mut balances),
+                    });
                 }
+                current_key = Some(key);
+                liquid_total = 0.0;
+                illiquid_total = 0.0;
             }
+            balances.insert(s.account_id, s.balance);
+            if *liquid_map.get(&s.account_id).unwrap_or(&true) {
+                liquid_total += s.balance;
+            } else {
+                illiquid_total += s.balance;
+            }
+        }
+        if let Some((y, m)) = current_key {
             rows.push(SnapshotGridRow {
-                year: t.year,
-                month: t.month,
-                balances,
-                total: t.total,
+                year: y,
+                month: m,
+                total: liquid_total + illiquid_total,
                 liquid_total,
                 illiquid_total,
+                balances,
             });
         }
         Ok(rows)

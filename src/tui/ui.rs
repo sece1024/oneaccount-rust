@@ -149,11 +149,12 @@ fn render_trend_table(frame: &mut Frame, app: &mut App, area: Rect) {
             let style = if i == app.overview_selected { sel_style() } else { Style::default() };
             Row::new([
                 Cell::from(format!("{}-{:02}", t.year, t.month)),
-                Cell::from(Span::styled(
+                Cell::from(Line::styled(
                     fmt_balance(t.total),
                     Style::default().fg(GREEN).add_modifier(Modifier::BOLD),
-                )),
-                Cell::from(Span::styled(delta_str, Style::default().fg(delta_color))),
+                ).alignment(Alignment::Right)),
+                Cell::from(Line::styled(delta_str, Style::default().fg(delta_color))
+                    .alignment(Alignment::Right)),
             ])
             .style(style)
         })
@@ -201,10 +202,10 @@ fn render_latest_snapshot(frame: &mut Frame, app: &App, area: Rect) {
             Row::new([
                 Cell::from(acc.name.clone()),
                 Cell::from(acc.account_type.display_name()),
-                Cell::from(Span::styled(
+                Cell::from(Line::styled(
                     fmt_balance(acc.balance),
                     Style::default().fg(color),
-                )),
+                ).alignment(Alignment::Right)),
             ])
         })
         .collect();
@@ -214,10 +215,10 @@ fn render_latest_snapshot(frame: &mut Frame, app: &App, area: Rect) {
     let total_row = Row::new([
         Cell::from(Span::styled("合计", Style::default().add_modifier(Modifier::BOLD))),
         Cell::from(""),
-        Cell::from(Span::styled(
+        Cell::from(Line::styled(
             fmt_balance(total),
             Style::default().fg(total_color).add_modifier(Modifier::BOLD),
-        )),
+        ).alignment(Alignment::Right)),
     ]);
 
     let header = Row::new(["账户", "类型", "余额"])
@@ -297,9 +298,9 @@ fn render_monthly_entry(frame: &mut Frame, app: &App, area: Rect) {
             Row::new([
                 Cell::from(if is_sel { format!("▶ {}", item.account_name) } else { format!("  {}", item.account_name) }),
                 Cell::from(item.account_type.clone()),
-                Cell::from(item.display_last()),
-                Cell::from(Span::styled(new_val, new_style)),
-                Cell::from(Span::styled(delta, Style::default().fg(delta_color))),
+                Cell::from(Line::from(item.display_last()).alignment(Alignment::Right)),
+                Cell::from(Line::styled(new_val, new_style).alignment(Alignment::Right)),
+                Cell::from(Line::styled(delta, Style::default().fg(delta_color)).alignment(Alignment::Right)),
             ])
             .style(row_style)
         })
@@ -369,10 +370,10 @@ fn render_large_expenses(frame: &mut Frame, app: &App, area: Rect) {
             Row::new([
                 Cell::from(tx.date.clone()),
                 Cell::from(tx.category_name.clone().unwrap_or_else(|| "未分类".into())),
-                Cell::from(Span::styled(
+                Cell::from(Line::styled(
                     format!("-¥{:.2}", tx.amount),
                     Style::default().fg(RED).add_modifier(Modifier::BOLD),
-                )),
+                ).alignment(Alignment::Right)),
                 Cell::from(tx.account_name.clone().unwrap_or_default()),
                 Cell::from(tx.note.clone().unwrap_or_default()),
             ])

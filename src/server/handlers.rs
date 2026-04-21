@@ -140,6 +140,17 @@ pub async fn delete_transaction(
     }
 }
 
+pub async fn update_transaction(
+    State(svc): State<AppState>,
+    Path(id): Path<i64>,
+    Json(req): Json<NewTransaction>,
+) -> impl IntoResponse {
+    match svc.update_transaction(id, &req) {
+        Ok(tx) => Json(tx).into_response(),
+        Err(e) => internal_error(e).into_response(),
+    }
+}
+
 // ── Stats ─────────────────────────────────────────────────────────────────────
 
 #[derive(Deserialize)]
