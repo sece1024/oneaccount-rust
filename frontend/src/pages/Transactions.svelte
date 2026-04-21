@@ -22,6 +22,8 @@
   // filters
   let filterType = ''
   let filterAccount = ''
+  let filterStartDate = ''
+  let filterEndDate = ''
 
   // pagination
   const PAGE_SIZE = 50
@@ -51,6 +53,8 @@
         listTransactions({
           tx_type: filterType || undefined,
           account_id: filterAccount ? Number(filterAccount) : undefined,
+          start_date: filterStartDate || undefined,
+          end_date: filterEndDate || undefined,
           limit: PAGE_SIZE + 1,
           offset,
         }),
@@ -72,6 +76,8 @@
       const loaded = await listTransactions({
         tx_type: filterType || undefined,
         account_id: filterAccount ? Number(filterAccount) : undefined,
+        start_date: filterStartDate || undefined,
+        end_date: filterEndDate || undefined,
         limit: PAGE_SIZE + 1,
         offset,
       })
@@ -166,6 +172,12 @@
           <option value={acc.id}>{acc.name}</option>
         {/each}
       </select>
+      <input type="date" bind:value={filterStartDate} on:change={load} title="起始日期" placeholder="起始日期" />
+      <span class="muted">~</span>
+      <input type="date" bind:value={filterEndDate} on:change={load} title="结束日期" placeholder="结束日期" />
+      {#if filterStartDate || filterEndDate}
+        <button class="clear-btn" on:click={() => { filterStartDate = ''; filterEndDate = ''; load() }}>✕</button>
+      {/if}
     </div>
     <button class="primary" on:click={() => { editingId = null; form = emptyForm(); showForm = !showForm; requestAnimationFrame(() => formEl?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })) }}>＋ 新增账目</button>
   </div>
@@ -293,8 +305,11 @@
 
 <style>
 .toolbar { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-.filters { display: flex; gap: 8px; }
+.filters { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .filters select { width: auto; }
+.filters input[type="date"] { width: 140px; font-size: 13px; padding: 6px 8px; }
+.clear-btn { padding: 4px 8px; font-size: 12px; background: var(--bg3); border: 1px solid var(--border); color: var(--muted); border-radius: 4px; cursor: pointer; }
+.clear-btn:hover { color: var(--red); }
 .form-card { margin-bottom: 0; }
 .form-card.editing { border-left: 3px solid var(--cyan); }
 .form-title { margin: 0 0 12px; font-size: 14px; font-weight: 600; color: var(--text); }
