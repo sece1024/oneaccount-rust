@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte'
+  import { listAccounts, fmtBalance, type Account } from './lib/api'
   import Ledger from './pages/Ledger.svelte'
   import Accounts from './pages/Accounts.svelte'
   import Transactions from './pages/Transactions.svelte'
@@ -22,16 +23,27 @@
   }
 
   let tab: Tab = tabFromHash()
+  let sidebarAccounts: Account[] = []
+
+  $: liquidTotal = sidebarAccounts.filter(a => a.is_liquid).reduce((s, a) => s + a.balance, 0)
+  $: netTotal = sidebarAccounts.reduce((s, a) => s + a.balance, 0)
+
+  async function refreshSidebar() {
+    try { sidebarAccounts = await listAccounts() } catch {}
+  }
 
   function navigate(id: Tab) {
     tab = id
     location.hash = '#/' + id
+    refreshSidebar()
   }
 
   onMount(() => {
+    refreshSidebar()
     const onHash = () => { tab = tabFromHash() }
     window.addEventListener('hashchange', onHash)
-    return () => window.removeEventListener('hashchange', onHash)
+    const interval = setInterval(refreshSidebar, 30_000)
+    return () => { window.removeEventListener('hashchange', onHash); clearInterval(interval) }
   })
 </script>
 
@@ -52,6 +64,18 @@
         </button>
       {/each}
     </nav>
+    {#if sidebarAccounts.length > 0}
+      <div class="asset-summary">
+        <div class="summary-row">
+          <span class="summary-label">净资产</span>
+          <span class="summary-val" class:pos={netTotal >= 0} class:neg={netTotal < 0}>{fmtBalance(netTotal)}</span>
+        </div>
+        <div class="summary-row">
+          <span class="summary-label">活动资金</span>
+          <span class="summary-val liquid">{fmtBalance(liquidTotal)}</span>
+        </div>
+      </div>
+    {/if}
     <div class="sidebar-footer muted">
       API: localhost:8080
     </div>
@@ -120,8 +144,20 @@
 }
 
 .sidebar-footer {
-  margin-top: auto;
   padding: 16px 20px;
   font-size: 11px;
 }
+
+.asset-summary {
+  margin-top: auto;
+  padding: 16px 20px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.summary-row { display: flex; justify-content: space-between; align-items: center; }
+.summary-label { font-size: 11px; color: var(--muted); }
+.summary-val { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.summary-val.liquid { color: var(--cyan); }
 </style>
