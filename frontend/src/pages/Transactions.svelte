@@ -315,7 +315,8 @@
 .form-title { margin: 0 0 12px; font-size: 14px; font-weight: 600; color: var(--text); }
 .large-check { display: flex; align-items: center; gap: 6px; font-size: 13px; margin-right: auto; }
 .large-check input { width: auto; }
-.actions-cell { display: flex; gap: 4px; }
+.actions-cell { display: flex; gap: 4px; opacity: 0; transition: opacity 0.15s; }
+tr:hover .actions-cell { opacity: 1; }
 .load-more {
   display: block;
   margin: 12px auto;

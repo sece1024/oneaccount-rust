@@ -153,7 +153,7 @@
               <td class:neg={acc.balance < 0} class:pos={acc.balance >= 0}>
                 {fmtBalance(acc.balance)}
               </td>
-              <td>
+              <td class="actions-cell">
                 <button class="danger" on:click={() => del(acc.id, acc.name)}>删除</button>
               </td>
             </tr>
@@ -185,4 +185,6 @@
 .liquid-btn.liquid { background: rgba(125,211,252,.12); color: var(--cyan); border-color: var(--cyan); }
 .liquid-btn.illiquid { background: rgba(251,191,36,.12); color: var(--yellow); border-color: var(--yellow); }
 .liquid-btn:hover { opacity: 0.75; }
+.actions-cell { opacity: 0; transition: opacity 0.15s; }
+tr:hover .actions-cell { opacity: 1; }
 </style>
