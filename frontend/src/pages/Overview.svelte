@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
+  import { onMount, tick } from 'svelte'
   import {
     monthlyStats, categoryStats, getSnapshotGrid, fmtBalance,
     type MonthlyStats, type CategoryStat, type SnapshotGridRow,
@@ -39,13 +39,14 @@
         categoryStats(start, end),
         getSnapshotGrid(12),
       ])
-      renderChart()
-      renderTrend()
     } catch (e: any) {
       error = e.message
     } finally {
       loading = false
     }
+    await tick()
+    renderChart()
+    renderTrend()
   }
 
   function renderChart() {
