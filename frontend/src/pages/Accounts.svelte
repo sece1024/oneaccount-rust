@@ -141,7 +141,16 @@
   {/if}
 
   {#if loading}
-    <p class="empty">加载中…</p>
+    <div class="card" style="padding:20px">
+      {#each Array(3) as _}
+        <div class="skeleton-row">
+          <div class="skeleton skeleton-bar" style="width:120px"></div>
+          <div class="skeleton skeleton-bar" style="width:70px"></div>
+          <div class="skeleton skeleton-bar" style="width:90px"></div>
+          <div class="skeleton skeleton-bar" style="flex:1"></div>
+        </div>
+      {/each}
+    </div>
   {:else if accounts.length === 0}
     <EmptyState
       icon="🏦"

@@ -141,7 +141,14 @@
   </div>
 
   {#if loading}
-    <p class="empty">加载中…</p>
+    <div class="stat-grid">
+      {#each Array(4) as _}
+        <div class="card stat">
+          <div class="skeleton skeleton-bar" style="width:60px;height:12px;margin-bottom:8px"></div>
+          <div class="skeleton skeleton-bar h-lg" style="width:120px"></div>
+        </div>
+      {/each}
+    </div>
   {:else if error}
     <p class="empty neg">{error}</p>
   {:else if stats}
@@ -197,6 +204,8 @@
 .month-nav { display: flex; align-items: center; gap: 12px; font-size: 16px; font-weight: 600; }
 .month-nav button { padding: 4px 12px; font-size: 18px; }
 .stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
+.stat { transition: transform 0.2s, box-shadow 0.2s; }
+.stat:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
 .stat .label { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
 .stat .val { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .chart-card .card-title { font-size: 13px; color: var(--muted); margin-bottom: 12px; }

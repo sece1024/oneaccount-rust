@@ -100,21 +100,26 @@
 .sidebar {
   width: 200px;
   flex-shrink: 0;
-  background: var(--bg2);
+  background: linear-gradient(180deg, var(--bg2) 0%, #151823 100%);
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   padding: 20px 0;
   gap: 4px;
+  box-shadow: 2px 0 12px rgba(0,0,0,.3);
 }
 
 .brand {
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--cyan);
+  font-size: 17px;
+  font-weight: 800;
   padding: 0 20px 20px;
   border-bottom: 1px solid var(--border);
   margin-bottom: 8px;
+  background: linear-gradient(135deg, var(--cyan), #a78bfa);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  letter-spacing: 0.5px;
 }
 
 .nav-item {
@@ -131,7 +136,11 @@
   text-align: left;
 }
 .nav-item:hover { background: var(--bg3); color: var(--text); }
-.nav-item.active { background: var(--bg3); color: var(--cyan); border-left: 2px solid var(--cyan); }
+.nav-item.active {
+  background: linear-gradient(90deg, rgba(125,211,252,.08) 0%, transparent 100%);
+  color: var(--cyan);
+  border-left: 2px solid var(--cyan);
+}
 .icon { font-size: 16px; }
 
 .content {
