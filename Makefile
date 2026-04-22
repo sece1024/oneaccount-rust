@@ -9,6 +9,13 @@ build:
 	cargo build --release
 	@echo "✅ 本机构建完成: target/release/$(APP)"
 
+# 构建前端 + 后端一体化可执行文件
+.PHONY: build-release
+build-release: build-frontend
+	cargo build --release
+	@echo "✅ 一体化构建完成（含前端）: target/release/$(APP)"
+	@ls -lh target/release/$(APP)
+
 .PHONY: run-tui
 run-tui:
 	cargo run -- tui
@@ -129,6 +136,7 @@ help:
 	@echo ""
 	@echo "用法:"
 	@echo "  make build           本机构建（release）"
+	@echo "  make build-release   构建前端 + 后端一体化可执行文件"
 	@echo "  make test            运行所有测试"
 	@echo "  make run-tui         启动 TUI 界面"
 	@echo "  make run-server      启动 HTTP 服务"

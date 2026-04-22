@@ -1,13 +1,49 @@
 use std::sync::Arc;
 
 use axum::Router;
-use tower_http::cors::{CorsLayer, Any};
 use axum::http::Method;
+use axum::response::IntoResponse;
+use tower_http::cors::{CorsLayer, Any};
+use rust_embed::Embed;
 
 use crate::db::DbPool;
 use crate::service::AppService;
 
 use super::handlers;
+
+#[derive(Embed)]
+#[folder = "frontend/dist/"]
+struct FrontendAssets;
+
+async fn static_handler(uri: axum::http::Uri) -> impl IntoResponse {
+    let path = uri.path().trim_start_matches('/');
+    // Try the exact path first, then fall back to index.html (SPA)
+    let path = if path.is_empty() { "index.html" } else { path };
+
+    match FrontendAssets::get(path) {
+        Some(content) => {
+            let mime = mime_guess::from_path(path)
+                .first_or_octet_stream()
+                .to_string();
+            (
+                [(axum::http::header::CONTENT_TYPE, mime)],
+                content.data.into_owned(),
+            )
+                .into_response()
+        }
+        None => {
+            // SPA fallback: serve index.html for any unknown path
+            match FrontendAssets::get("index.html") {
+                Some(content) => (
+                    [(axum::http::header::CONTENT_TYPE, "text/html".to_string())],
+                    content.data.into_owned(),
+                )
+                    .into_response(),
+                None => (axum::http::StatusCode::NOT_FOUND, "404").into_response(),
+            }
+        }
+    }
+}
 
 pub fn build_router(pool: Arc<DbPool>) -> Router {
     let service = Arc::new(AppService::new(pool));
@@ -19,6 +55,7 @@ pub fn build_router(pool: Arc<DbPool>) -> Router {
 
     Router::new()
         .nest("/api/v1", api_routes(service))
+        .fallback(static_handler)
         .layer(cors)
 }
 
