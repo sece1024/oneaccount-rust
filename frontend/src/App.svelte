@@ -5,16 +5,18 @@
   import Accounts from './pages/Accounts.svelte'
   import Transactions from './pages/Transactions.svelte'
   import Overview from './pages/Overview.svelte'
+  import Settings from './pages/Settings.svelte'
   import Toast from './components/Toast.svelte'
   import ConfirmDialog from './components/ConfirmDialog.svelte'
 
-  type Tab = 'ledger' | 'overview' | 'transactions' | 'accounts'
+  type Tab = 'ledger' | 'overview' | 'transactions' | 'accounts' | 'settings'
 
   const TABS: { id: Tab; label: string; icon: string }[] = [
     { id: 'ledger',       label: '月结表格', icon: '📒' },
     { id: 'overview',     label: '统计概览', icon: '📊' },
     { id: 'transactions', label: '账目流水', icon: '💸' },
     { id: 'accounts',     label: '账户管理', icon: '💳' },
+    { id: 'settings',     label: '设置',     icon: '⚙️' },
   ]
 
   function tabFromHash(): Tab {
@@ -90,6 +92,8 @@
       <Transactions />
     {:else if tab === 'accounts'}
       <Accounts />
+    {:else if tab === 'settings'}
+      <Settings />
     {/if}
   </main>
 </div>

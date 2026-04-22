@@ -306,3 +306,38 @@ pub async fn category_stats(
         Err(e) => internal_error(e).into_response(),
     }
 }
+
+// ── Backup ────────────────────────────────────────────────────────────────────
+
+pub async fn create_backup(
+    State(db_path): State<String>,
+) -> impl IntoResponse {
+    match crate::backup::create_backup(&db_path) {
+        Ok(path) => {
+            let _ = crate::backup::prune_backups(&db_path, 10);
+            let name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+            Json(serde_json::json!({ "ok": true, "file": name })).into_response()
+        }
+        Err(e) => internal_error(e).into_response(),
+    }
+}
+
+pub async fn list_backups(
+    State(db_path): State<String>,
+) -> impl IntoResponse {
+    match crate::backup::list_backups(&db_path) {
+        Ok(files) => {
+            let items: Vec<serde_json::Value> = files
+                .iter()
+                .filter_map(|f| {
+                    let meta = std::fs::metadata(f).ok()?;
+                    let name = f.file_name()?.to_string_lossy().to_string();
+                    let size = meta.len();
+                    Some(serde_json::json!({ "name": name, "size": size }))
+                })
+                .collect();
+            Json(items).into_response()
+        }
+        Err(e) => internal_error(e).into_response(),
+    }
+}

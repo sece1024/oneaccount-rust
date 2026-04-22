@@ -197,3 +197,13 @@ export const saveSnapshot = (year: number, month: number, balances: { account_id
     method: 'POST',
     body: JSON.stringify({ year, month, balances, note }),
   })
+
+// ── Backup ─────────────────────────────────────────────────
+
+export interface BackupFile { name: string; size: number }
+
+export const triggerBackup = () =>
+  request<{ ok: boolean; file: string }>('/backup')
+
+export const listBackupFiles = () =>
+  request<BackupFile[]>('/backup/list')

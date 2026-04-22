@@ -9,8 +9,8 @@ use tokio::net::TcpListener;
 use crate::db::DbPool;
 use crate::error::Result;
 
-pub async fn run_server(pool: Arc<DbPool>, host: &str, port: u16) -> Result<()> {
-    let app: Router = routes::build_router(pool);
+pub async fn run_server(pool: Arc<DbPool>, host: &str, port: u16, db_path: &str) -> Result<()> {
+    let app: Router = routes::build_router(pool, db_path.to_string());
     let addr = format!("{host}:{port}");
     tracing::info!("HTTP 服务启动: http://{addr}");
     let listener = TcpListener::bind(&addr).await.map_err(crate::error::AppError::Io)?;

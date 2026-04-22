@@ -45,7 +45,7 @@ async fn static_handler(uri: axum::http::Uri) -> impl IntoResponse {
     }
 }
 
-pub fn build_router(pool: Arc<DbPool>) -> Router {
+pub fn build_router(pool: Arc<DbPool>, db_path: String) -> Router {
     let service = Arc::new(AppService::new(pool));
 
     let cors = CorsLayer::new()
@@ -54,15 +54,15 @@ pub fn build_router(pool: Arc<DbPool>) -> Router {
         .allow_headers(Any);
 
     Router::new()
-        .nest("/api/v1", api_routes(service))
+        .nest("/api/v1", api_routes(service, db_path))
         .fallback(static_handler)
         .layer(cors)
 }
 
-fn api_routes(service: Arc<AppService>) -> Router {
+fn api_routes(service: Arc<AppService>, db_path: String) -> Router {
     use axum::routing::{delete, get, post, put};
 
-    Router::new()
+    let service_routes = Router::new()
         // Accounts
         .route("/accounts", get(handlers::list_accounts).post(handlers::create_account))
         .route("/accounts/:id", delete(handlers::delete_account))
@@ -82,5 +82,12 @@ fn api_routes(service: Arc<AppService>) -> Router {
         .route("/snapshots/grid", get(handlers::get_snapshot_grid))
         .route("/snapshots/entry-items", get(handlers::get_entry_items))
         .route("/snapshots", post(handlers::save_snapshot))
-        .with_state(service)
+        .with_state(service);
+
+    let backup_routes = Router::new()
+        .route("/backup", get(handlers::create_backup))
+        .route("/backup/list", get(handlers::list_backups))
+        .with_state(db_path);
+
+    service_routes.merge(backup_routes)
 }

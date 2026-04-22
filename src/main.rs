@@ -1,3 +1,4 @@
+mod backup;
 mod csv;
 mod dao;
 mod db;
@@ -60,6 +61,15 @@ enum Commands {
         #[arg(default_value = "oneaccount_export.csv")]
         output: PathBuf,
     },
+    /// 备份数据库
+    Backup,
+    /// 从备份恢复数据库
+    Restore {
+        /// 备份文件路径
+        file: PathBuf,
+    },
+    /// 列出所有备份
+    Backups,
 }
 
 fn parse_mapping(s: &str) -> std::result::Result<(String, String), String> {
@@ -102,8 +112,14 @@ fn main() -> anyhow::Result<()> {
         }
 
         Commands::Server { host, port } => {
+            // 启动前自动备份，保留最近 10 个
+            if let Err(e) = backup::create_backup(&db_path) {
+                tracing::warn!("自动备份失败: {e}");
+            } else {
+                let _ = backup::prune_backups(&db_path, 10);
+            }
             let rt = tokio::runtime::Runtime::new()?;
-            rt.block_on(server::run_server(pool, &host, port))?;
+            rt.block_on(server::run_server(pool, &host, port, &db_path))?;
         }
 
         Commands::Import { file, account_id, mappings } => {
@@ -122,6 +138,34 @@ fn main() -> anyhow::Result<()> {
             let f = std::fs::File::create(&output)?;
             let count = csv::export_csv(f, &svc)?;
             println!("✅ 已导出 {count} 条账单 → {}", output.display());
+        }
+
+        Commands::Backup => {
+            let path = backup::create_backup(&db_path)?;
+            backup::prune_backups(&db_path, 10)?;
+            println!("✅ 备份完成: {}", path.display());
+        }
+
+        Commands::Restore { file } => {
+            let safety = backup::restore_backup(&db_path, &file)?;
+            println!("✅ 已恢复数据库（恢复前备份: {}）", safety.display());
+            println!("⚠️  请重启应用以加载恢复后的数据");
+        }
+
+        Commands::Backups => {
+            let files = backup::list_backups(&db_path)?;
+            if files.is_empty() {
+                println!("暂无备份");
+            } else {
+                println!("备份列表（{}）:", backup::backup_dir(&db_path).display());
+                for f in &files {
+                    let meta = std::fs::metadata(f)?;
+                    let size = meta.len();
+                    let name = f.file_name().unwrap_or_default().to_string_lossy();
+                    println!("  {name}  ({:.1} KB)", size as f64 / 1024.0);
+                }
+                println!("\n共 {} 个备份", files.len());
+            }
         }
     }
 
