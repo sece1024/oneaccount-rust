@@ -28,6 +28,7 @@ impl std::str::FromStr for CategoryType {
 }
 
 impl CategoryType {
+    #[allow(dead_code)]
     pub fn display_name(&self) -> &'static str {
         match self {
             CategoryType::Income => "收入",

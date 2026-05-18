@@ -13,8 +13,6 @@ use std::sync::Arc;
 
 use clap::{Parser, Subcommand};
 
-use error::Result;
-
 #[derive(Parser)]
 #[command(
     name = "oneaccount",

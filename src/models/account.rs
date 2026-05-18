@@ -79,6 +79,7 @@ impl AccountType {
     }
 
     /// 默认是否为活动资金（可随时提取）
+    #[allow(dead_code)]
     pub fn default_liquid(&self) -> bool {
         !matches!(self, AccountType::Stock | AccountType::Crypto | AccountType::SocialInsurance | AccountType::Fund)
     }

@@ -44,6 +44,7 @@ impl CategoryDao {
         Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
     }
 
+    #[allow(dead_code)]
     pub fn find_by_type(conn: &Connection, cat_type: &CategoryType) -> Result<Vec<Category>> {
         let mut stmt = conn.prepare(
             "SELECT id, name, category_type, icon, parent_id
@@ -53,6 +54,7 @@ impl CategoryDao {
         Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
     }
 
+    #[allow(dead_code)]
     pub fn delete(conn: &Connection, id: i64) -> Result<()> {
         conn.execute("DELETE FROM categories WHERE id = ?1", params![id])?;
         Ok(())

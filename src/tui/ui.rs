@@ -1,13 +1,11 @@
-use chrono::Datelike;
 use ratatui::{
     Frame,
-    layout::{Alignment, Constraint, Direction, Layout, Rect},
+    layout::{Alignment, Constraint, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Cell, Clear, Paragraph, Row, Table, Tabs},
 };
 
-use crate::models::transaction::TransactionType;
 use super::app::{App, ExpenseField, ImportField, Tab};
 
 // ── 颜色主题 ───────────────────────────────────────────────────────────────────

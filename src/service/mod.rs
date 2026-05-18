@@ -41,6 +41,7 @@ impl AppService {
         AccountDao::create(&conn, req)
     }
 
+    #[allow(dead_code)]
     pub fn total_balance(&self) -> Result<f64> {
         let conn = self.pool.get()?;
         AccountDao::total_balance(&conn)
@@ -63,6 +64,7 @@ impl AppService {
         CategoryDao::find_all(&conn)
     }
 
+    #[allow(dead_code)]
     pub fn list_categories_by_type(&self, cat_type: &CategoryType) -> Result<Vec<Category>> {
         let conn = self.pool.get()?;
         CategoryDao::find_by_type(&conn, cat_type)
@@ -223,6 +225,7 @@ impl AppService {
         )
     }
 
+    #[allow(dead_code)]
     pub fn recent_transactions(&self, limit: i64) -> Result<Vec<Transaction>> {
         let conn = self.pool.get()?;
         TransactionDao::recent(&conn, limit)

@@ -101,6 +101,7 @@ impl TransactionDao {
         Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
     }
 
+    #[allow(dead_code)]
     pub fn recent(conn: &Connection, limit: i64) -> Result<Vec<Transaction>> {
         Self::find_with_filter(
             conn,

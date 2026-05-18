@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use chrono::Datelike;
-use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
+use crossterm::event::{self, Event, KeyEventKind};
 use ratatui::DefaultTerminal;
 
 use crate::db::DbPool;
@@ -109,6 +109,7 @@ impl MonthlyForm {
             .sum()
     }
 
+    #[allow(dead_code)]
     pub fn all_confirmed(&self) -> bool {
         !self.entries.is_empty() && self.entries.iter().all(|e| e.confirmed_balance.is_some())
     }
@@ -298,7 +299,6 @@ impl App {
     }
 
     pub fn refresh_monthly_form(&mut self) {
-        let now = chrono::Local::now();
         let year = self.monthly_form.year;
         let month = self.monthly_form.month;
         if let Ok(entries) = self.service.build_monthly_entry_items() {

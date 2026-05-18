@@ -292,7 +292,7 @@ impl App {
         Ok(())
     }
 
-    fn handle_accounts(&mut self, code: KeyCode, modifiers: KeyModifiers) -> Result<()> {
+    fn handle_accounts(&mut self, code: KeyCode, _modifiers: KeyModifiers) -> Result<()> {
         if self.adding_account {
             return self.handle_new_account_form(code);
         }

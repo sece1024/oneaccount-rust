@@ -1,47 +1,56 @@
 use std::sync::Arc;
+use std::path::PathBuf;
 
 use axum::Router;
 use axum::http::Method;
 use axum::response::IntoResponse;
 use tower_http::cors::{CorsLayer, Any};
-use rust_embed::Embed;
 
 use crate::db::DbPool;
 use crate::service::AppService;
 
 use super::handlers;
 
-#[derive(Embed)]
-#[folder = "frontend/dist/"]
-struct FrontendAssets;
-
 async fn static_handler(uri: axum::http::Uri) -> impl IntoResponse {
-    let path = uri.path().trim_start_matches('/');
-    // Try the exact path first, then fall back to index.html (SPA)
-    let path = if path.is_empty() { "index.html" } else { path };
+    let raw_path = uri.path().trim_start_matches('/');
+    // Block path traversal attempts and normalize SPA root.
+    let requested = if raw_path.is_empty() || raw_path.contains("..") || raw_path.contains('\\') {
+        "index.html"
+    } else {
+        raw_path
+    };
 
-    match FrontendAssets::get(path) {
-        Some(content) => {
-            let mime = mime_guess::from_path(path)
+    let dist_dir = PathBuf::from("frontend").join("dist");
+    let requested_file = dist_dir.join(requested);
+
+    if let Ok(content) = std::fs::read(&requested_file) {
+        let mime = mime_guess::from_path(&requested_file)
+            .first_or_octet_stream()
+            .to_string();
+        return (
+            [(axum::http::header::CONTENT_TYPE, mime)],
+            content,
+        )
+            .into_response();
+    }
+
+    let index_file = dist_dir.join("index.html");
+    match std::fs::read(&index_file) {
+        Ok(content) => {
+            let mime = mime_guess::from_path("index.html")
                 .first_or_octet_stream()
                 .to_string();
             (
                 [(axum::http::header::CONTENT_TYPE, mime)],
-                content.data.into_owned(),
+                content,
             )
                 .into_response()
         }
-        None => {
-            // SPA fallback: serve index.html for any unknown path
-            match FrontendAssets::get("index.html") {
-                Some(content) => (
-                    [(axum::http::header::CONTENT_TYPE, "text/html".to_string())],
-                    content.data.into_owned(),
-                )
-                    .into_response(),
-                None => (axum::http::StatusCode::NOT_FOUND, "404").into_response(),
-            }
-        }
+        Err(_) => (
+            axum::http::StatusCode::NOT_FOUND,
+            "frontend assets not found; build frontend first (cd frontend && npm run build)",
+        )
+            .into_response(),
     }
 }
 

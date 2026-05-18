@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use crate::models::account::NewAccount;
 use crate::models::category::NewCategory;
 use crate::models::transaction::{NewTransaction, TransactionFilter, TransactionType};
-use crate::service::{AppService, SnapshotGridRow};
+use crate::service::AppService;
 
 type AppState = Arc<AppService>;
 
