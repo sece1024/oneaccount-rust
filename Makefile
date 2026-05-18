@@ -28,18 +28,25 @@ run-server:
 
 .PHONY: dev-frontend
 dev-frontend:
-	cd frontend && npm run dev
+	cd frontend && pnpm run dev
 
 .PHONY: build-frontend
 build-frontend:
-	cd frontend && npm run build
+	cd frontend && pnpm run build
+
+# 导入资产表 CSV（按币种生成月度快照）
+# 用法: make import-assets-csv CSV_FILE="data/money total - asset table.csv"
+.PHONY: import-assets-csv
+import-assets-csv:
+	@test -n "$(CSV_FILE)" || (echo "请提供 CSV_FILE, 例如: make import-assets-csv CSV_FILE='data/money total - asset table.csv'" && exit 1)
+	bash scripts/import_asset_snapshots.sh "$(CSV_FILE)"
 
 # 同时启动后端（8080）+ 前端 dev server，Ctrl-C 可一并停止
 .PHONY: dev
 dev:
 	@trap 'kill 0' INT; \
 	cargo run -- server --port 8080 & \
-	cd frontend && npm run dev & \
+	cd frontend && pnpm run dev & \
 	wait
 
 # ── 测试 ───────────────────────────────────────────────────────────────────────
@@ -142,6 +149,7 @@ help:
 	@echo "  make run-server      启动 HTTP 服务"
 	@echo "  make dev             同时启动后端 + 前端（Ctrl-C 一并停止）"
 	@echo "  make dev-frontend    仅启动前端 dev server"
+	@echo "  make import-assets-csv CSV_FILE=...  导入资产表 CSV（CNY/HKD 月度快照）"
 	@echo "  make build-rpi-arm64 交叉编译到树莓派 64-bit"
 	@echo "  make build-rpi-armv7 交叉编译到树莓派 32-bit"
 	@echo "  make build-all       编译所有平台"

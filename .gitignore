@@ -17,3 +17,6 @@
 *.db
 *.db-shm
 *.db-wal
+
+# 个人数据
+/data
