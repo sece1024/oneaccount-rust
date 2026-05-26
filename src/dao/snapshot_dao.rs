@@ -56,13 +56,15 @@ impl SnapshotDao {
         Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
     }
 
-    /// 查询最近 N 个月的总资产（用于趋势展示）
+    /// 查询最近 N 个月的总资产（仅统计 CNY 账户，避免多币种混算）
     pub fn monthly_totals(conn: &Connection, limit: i64) -> Result<Vec<MonthlyTotal>> {
         let mut stmt = conn.prepare(
-            "SELECT year, month, SUM(balance) as total
-             FROM balance_snapshots
-             GROUP BY year, month
-             ORDER BY year DESC, month DESC
+            "SELECT bs.year, bs.month, SUM(bs.balance) as total
+             FROM balance_snapshots bs
+             JOIN accounts a ON bs.account_id = a.id
+             WHERE a.currency = 'CNY'
+             GROUP BY bs.year, bs.month
+             ORDER BY bs.year DESC, bs.month DESC
              LIMIT ?1",
         )?;
         let rows = stmt.query_map(params![limit], |r| {

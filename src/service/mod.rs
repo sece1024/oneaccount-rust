@@ -15,9 +15,14 @@ pub struct SnapshotGridRow {
     pub year: i32,
     pub month: u32,
     pub balances: std::collections::HashMap<i64, f64>,
+    /// CNY 账户合计
     pub total: f64,
+    /// CNY 活动资产合计
     pub liquid_total: f64,
+    /// CNY 非活动资产合计
     pub illiquid_total: f64,
+    /// 各币种余额合计（含 CNY），用于多货币展示
+    pub currency_totals: std::collections::HashMap<String, f64>,
 }
 
 pub struct AppService {
@@ -320,6 +325,9 @@ impl AppService {
         let accounts = AccountDao::find_all(&conn)?;
         let liquid_map: std::collections::HashMap<i64, bool> =
             accounts.iter().map(|a| (a.id, a.is_liquid)).collect();
+        // 记录每个账户的货币类型，用于多货币分组统计
+        let currency_map: std::collections::HashMap<i64, String> =
+            accounts.iter().map(|a| (a.id, a.currency.clone())).collect();
 
         // 单次查询获取所有快照，按 (year, month) 分组
         let all_snaps = SnapshotDao::find_recent_months(&conn, months)?;
@@ -327,6 +335,7 @@ impl AppService {
         let mut rows: Vec<SnapshotGridRow> = Vec::new();
         let mut current_key: Option<(i32, u32)> = None;
         let mut balances = std::collections::HashMap::new();
+        let mut currency_totals: std::collections::HashMap<String, f64> = std::collections::HashMap::new();
         let mut liquid_total = 0.0f64;
         let mut illiquid_total = 0.0f64;
 
@@ -341,6 +350,7 @@ impl AppService {
                         liquid_total,
                         illiquid_total,
                         balances: std::mem::take(&mut balances),
+                        currency_totals: std::mem::take(&mut currency_totals),
                     });
                 }
                 current_key = Some(key);
@@ -348,10 +358,18 @@ impl AppService {
                 illiquid_total = 0.0;
             }
             balances.insert(s.account_id, s.balance);
-            if *liquid_map.get(&s.account_id).unwrap_or(&true) {
-                liquid_total += s.balance;
-            } else {
-                illiquid_total += s.balance;
+            let currency = currency_map
+                .get(&s.account_id)
+                .map(|c| c.as_str())
+                .unwrap_or("CNY");
+            *currency_totals.entry(currency.to_string()).or_insert(0.0) += s.balance;
+            // total / liquid_total / illiquid_total 只统计 CNY，避免跨币种混算
+            if currency == "CNY" {
+                if *liquid_map.get(&s.account_id).unwrap_or(&true) {
+                    liquid_total += s.balance;
+                } else {
+                    illiquid_total += s.balance;
+                }
             }
         }
         if let Some((y, m)) = current_key {
@@ -362,6 +380,7 @@ impl AppService {
                 liquid_total,
                 illiquid_total,
                 balances,
+                currency_totals,
             });
         }
         Ok(rows)
