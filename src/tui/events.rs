@@ -154,6 +154,12 @@ impl App {
             return Ok(());
         }
 
+        // 保存草稿
+        if modifiers == KeyModifiers::CONTROL && code == KeyCode::Char('d') {
+            self.save_draft()?;
+            return Ok(());
+        }
+
         if self.monthly_form.editing {
             match code {
                 KeyCode::Enter | KeyCode::Tab => {
@@ -188,14 +194,50 @@ impl App {
                 KeyCode::Enter => {
                     // 开始编辑当前账户余额
                     if let Some(item) = self.monthly_form.entries.get(self.monthly_form.selected) {
+                        // 记录撤销操作
+                        let account_id = item.account_id;
+                        let old_balance = item.confirmed_balance;
+                        let last_balance = item.last_balance;
+                        self.monthly_form.push_undo(crate::tui::app::UndoAction::Edit {
+                            account_id,
+                            old_balance,
+                            new_balance: None, // 将在确认时设置
+                        });
                         // 预填上次余额
-                        self.monthly_form.input_buf = item
-                            .confirmed_balance
-                            .or(item.last_balance)
+                        self.monthly_form.input_buf = old_balance
+                            .or(last_balance)
                             .map(|b| format!("{b:.2}"))
                             .unwrap_or_default();
                     }
                     self.monthly_form.editing = true;
+                }
+                // 撤销
+                KeyCode::Char('u') => {
+                    if self.monthly_form.undo() {
+                        self.status_msg = Some("⏪ 已撤销".into());
+                    } else {
+                        self.status_msg = Some("没有可撤销的操作".into());
+                    }
+                }
+                // 跳过当前账户（保持上月余额）
+                KeyCode::Char(' ') => {
+                    if let Some(item) = self.monthly_form.entries.get(self.monthly_form.selected) {
+                        if item.confirmed_balance.is_none() && item.last_balance.is_some() {
+                            self.monthly_form.push_undo(crate::tui::app::UndoAction::Confirm {
+                                account_id: item.account_id,
+                                old_confirmed: None,
+                            });
+                            if let Some(item) = self.monthly_form.entries.get_mut(self.monthly_form.selected) {
+                                item.confirmed_balance = item.last_balance;
+                                item.input = item.last_balance
+                                    .map(|b| format!("{b:.2}"))
+                                    .unwrap_or_default();
+                            }
+                            if self.monthly_form.selected + 1 < self.monthly_form.entries.len() {
+                                self.monthly_form.selected += 1;
+                            }
+                        }
+                    }
                 }
                 // 切换月份
                 KeyCode::Left => {

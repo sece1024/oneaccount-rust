@@ -25,6 +25,26 @@ pub struct SnapshotGridRow {
     pub currency_totals: std::collections::HashMap<String, f64>,
 }
 
+/// 月结智能默认值
+#[derive(Serialize)]
+pub struct SmartMonthDefaults {
+    pub year: i32,
+    pub month: u32,
+    pub entries: Vec<SmartEntry>,
+    pub total_accounts: usize,
+}
+
+/// 智能预填项
+#[derive(Serialize)]
+pub struct SmartEntry {
+    pub account_id: i64,
+    pub account_name: String,
+    pub account_type: String,
+    pub currency: String,
+    pub last_balance: Option<f64>,
+    pub suggested_balance: Option<f64>,
+}
+
 pub struct AppService {
     pool: Arc<DbPool>,
 }
@@ -278,6 +298,45 @@ impl AppService {
         Ok(items)
     }
 
+    /// 获取月结智能默认值（基于上月快照预填）
+    pub fn get_smart_defaults_for_month(&self, year: i32, month: u32) -> Result<SmartMonthDefaults> {
+        let conn = self.pool.get()?;
+
+        // 获取上月快照
+        let (prev_y, prev_m) = prev_month(year, month);
+        let prev_snapshots = SnapshotDao::find_month(&conn, prev_y, prev_m)?;
+
+        // 获取所有账户
+        let accounts = AccountDao::find_all(&conn)?;
+
+        let entries: Vec<SmartEntry> = accounts
+            .iter()
+            .map(|acc| {
+                let prev = prev_snapshots
+                    .iter()
+                    .find(|s| s.account_id == acc.id)
+                    .map(|s| s.balance);
+
+                SmartEntry {
+                    account_id: acc.id,
+                    account_name: acc.name.clone(),
+                    account_type: acc.account_type.display_name().to_string(),
+                    currency: acc.currency.clone(),
+                    last_balance: prev,
+                    // 智能预填：如果有上月余额，直接预填
+                    suggested_balance: prev,
+                }
+            })
+            .collect();
+
+        Ok(SmartMonthDefaults {
+            year,
+            month,
+            entries,
+            total_accounts: accounts.len(),
+        })
+    }
+
     /// 批量保存月结快照并同步更新账户余额（原子操作）
     pub fn save_monthly_snapshot(
         &self,
@@ -397,6 +456,15 @@ impl AppService {
         let file = std::fs::File::open(path)?;
         let mapping = crate::csv::FieldMapping::with_default();
         crate::csv::import_csv(file, self, &mapping, account_id)
+    }
+}
+
+/// 计算上月的年月
+fn prev_month(year: i32, month: u32) -> (i32, u32) {
+    if month == 1 {
+        (year - 1, 12)
+    } else {
+        (year, month - 1)
     }
 }
 

@@ -4,6 +4,7 @@ use std::time::Duration;
 use chrono::Datelike;
 use crossterm::event::{self, Event, KeyEventKind};
 use ratatui::DefaultTerminal;
+use serde::{Deserialize, Serialize};
 
 use crate::db::DbPool;
 use crate::error::Result;
@@ -12,6 +13,24 @@ use crate::models::category::Category;
 use crate::models::snapshot::{MonthlyEntryItem, MonthlyTotal};
 use crate::models::transaction::{NewTransaction, Transaction, TransactionType};
 use crate::service::AppService;
+
+// ── 草稿相关 ──────────────────────────────────────────────────────────────────
+
+/// 月结草稿
+#[derive(Serialize, Deserialize)]
+pub struct MonthlyDraft {
+    pub year: i32,
+    pub month: u32,
+    pub entries: Vec<DraftEntry>,
+    pub saved_at: String,
+}
+
+/// 草稿条目
+#[derive(Serialize, Deserialize)]
+pub struct DraftEntry {
+    pub account_id: i64,
+    pub balance: f64,
+}
 
 // ── CSV 导入表单 ──────────────────────────────────────────────────────────────
 
@@ -64,6 +83,22 @@ impl Tab {
 
 // ── 月结表单 ──────────────────────────────────────────────────────────────────
 
+/// 撤销操作类型
+#[derive(Clone)]
+pub enum UndoAction {
+    /// 编辑前的状态
+    Edit {
+        account_id: i64,
+        old_balance: Option<f64>,
+        new_balance: Option<f64>,
+    },
+    /// 确认前的状态
+    Confirm {
+        account_id: i64,
+        old_confirmed: Option<f64>,
+    },
+}
+
 pub struct MonthlyForm {
     pub year: i32,
     pub month: u32,
@@ -72,6 +107,7 @@ pub struct MonthlyForm {
     pub editing: bool,      // 当前是否在编辑某一行的余额
     pub input_buf: String,  // 输入缓冲区
     pub saved: bool,        // 本月是否已保存过
+    pub undo_stack: Vec<UndoAction>, // 撤销栈
 }
 
 impl MonthlyForm {
@@ -84,10 +120,61 @@ impl MonthlyForm {
             editing: false,
             input_buf: String::new(),
             saved,
+            undo_stack: Vec::new(),
+        }
+    }
+
+    /// 记录编辑操作（用于撤销）
+    pub fn push_undo(&mut self, action: UndoAction) {
+        self.undo_stack.push(action);
+        // 限制栈大小，避免内存占用过多
+        if self.undo_stack.len() > 100 {
+            self.undo_stack.remove(0);
+        }
+    }
+
+    /// 撤销上一步操作
+    pub fn undo(&mut self) -> bool {
+        if let Some(action) = self.undo_stack.pop() {
+            match action {
+                UndoAction::Edit {
+                    account_id,
+                    old_balance,
+                    ..
+                } => {
+                    if let Some(item) = self.entries.iter_mut().find(|e| e.account_id == account_id)
+                    {
+                        item.confirmed_balance = old_balance;
+                        item.input = old_balance
+                            .map(|b| format!("{b:.2}"))
+                            .unwrap_or_default();
+                    }
+                }
+                UndoAction::Confirm {
+                    account_id,
+                    old_confirmed,
+                } => {
+                    if let Some(item) = self.entries.iter_mut().find(|e| e.account_id == account_id)
+                    {
+                        item.confirmed_balance = old_confirmed;
+                    }
+                }
+            }
+            true
+        } else {
+            false
         }
     }
 
     pub fn confirm_current(&mut self) {
+        // 记录撤销操作
+        if let Some(item) = self.entries.get(self.selected) {
+            self.push_undo(UndoAction::Confirm {
+                account_id: item.account_id,
+                old_confirmed: item.confirmed_balance,
+            });
+        }
+
         if let Ok(val) = self.input_buf.trim().parse::<f64>() {
             if let Some(item) = self.entries.get_mut(self.selected) {
                 item.confirmed_balance = Some(val);
@@ -319,6 +406,10 @@ impl App {
                 }
             }
         }
+        // 尝试加载草稿（仅未保存时）
+        if !self.monthly_form.saved {
+            let _ = self.load_draft();
+        }
     }
 
     pub fn refresh_large_expenses(&mut self) {
@@ -345,6 +436,76 @@ impl App {
             "✅ {year}-{month:02} 月结保存成功，总资产 ¥{total:.2}"
         ));
         Ok(())
+    }
+
+    /// 保存草稿到本地文件
+    pub fn save_draft(&mut self) -> Result<()> {
+        let draft = MonthlyDraft {
+            year: self.monthly_form.year,
+            month: self.monthly_form.month,
+            entries: self
+                .monthly_form
+                .entries
+                .iter()
+                .filter(|e| e.confirmed_balance.is_some())
+                .map(|e| DraftEntry {
+                    account_id: e.account_id,
+                    balance: e.confirmed_balance.unwrap(),
+                })
+                .collect(),
+            saved_at: chrono::Local::now().to_rfc3339(),
+        };
+
+        let draft_path = self.draft_path();
+        // 确保目录存在
+        if let Some(parent) = draft_path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        let file = std::fs::File::create(&draft_path)?;
+        serde_json::to_writer_pretty(file, &draft)?;
+        self.status_msg = Some("💾 草稿已保存".into());
+        Ok(())
+    }
+
+    /// 加载草稿
+    pub fn load_draft(&mut self) -> Result<()> {
+        let draft_path = self.draft_path();
+        if !draft_path.exists() {
+            return Ok(());
+        }
+
+        let file = std::fs::File::open(&draft_path)?;
+        let draft: MonthlyDraft = serde_json::from_reader(file)?;
+
+        // 验证是否是当前月份的草稿
+        if draft.year == self.monthly_form.year && draft.month == self.monthly_form.month {
+            for entry in &draft.entries {
+                if let Some(item) = self
+                    .monthly_form
+                    .entries
+                    .iter_mut()
+                    .find(|e| e.account_id == entry.account_id)
+                {
+                    item.confirmed_balance = Some(entry.balance);
+                    item.input = format!("{:.2}", entry.balance);
+                }
+            }
+            self.status_msg = Some("📂 已恢复草稿".into());
+        }
+
+        Ok(())
+    }
+
+    /// 获取草稿文件路径
+    fn draft_path(&self) -> std::path::PathBuf {
+        dirs::data_dir()
+            .unwrap_or_else(|| std::path::PathBuf::from("."))
+            .join("oneaccount")
+            .join("drafts")
+            .join(format!(
+                "draft_{}_{}.json",
+                self.monthly_form.year, self.monthly_form.month
+            ))
     }
 
     pub fn submit_expense_form(&mut self) -> Result<()> {
