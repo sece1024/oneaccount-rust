@@ -87,6 +87,13 @@ fn api_routes(service: Arc<AppService>, db_path: String) -> Router {
         // Stats
         .route("/stats/monthly", get(handlers::monthly_stats))
         .route("/stats/by-category", get(handlers::category_stats))
+        // Analytics
+        .route("/analytics/summary", get(handlers::analytics_summary))
+        .route("/analytics/assets", get(handlers::analytics_assets))
+        .route("/analytics/health", get(handlers::analytics_health))
+        .route("/analytics/trend", get(handlers::analytics_trend))
+        // Smart defaults
+        .route("/smart/defaults", get(handlers::smart_defaults))
         // Snapshots
         .route("/snapshots/grid", get(handlers::get_snapshot_grid))
         .route("/snapshots/entry-items", get(handlers::get_entry_items))

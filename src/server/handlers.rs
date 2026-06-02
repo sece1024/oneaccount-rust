@@ -307,6 +307,82 @@ pub async fn category_stats(
     }
 }
 
+// ── Analytics ─────────────────────────────────────────────────────────────────
+
+#[derive(Deserialize)]
+pub struct YearMonthQuery {
+    year: Option<i32>,
+    month: Option<u32>,
+}
+
+#[derive(Deserialize)]
+pub struct TrendMonthsQuery {
+    months: Option<u32>,
+}
+
+pub async fn analytics_summary(
+    State(svc): State<AppState>,
+    Query(q): Query<YearMonthQuery>,
+) -> impl IntoResponse {
+    let now = chrono::Local::now();
+    let year = q.year.unwrap_or_else(|| now.year());
+    let month = q.month.unwrap_or_else(|| now.month());
+    match svc.get_monthly_comparison(year, month) {
+        Ok(data) => Json(data).into_response(),
+        Err(e) => internal_error(e).into_response(),
+    }
+}
+
+pub async fn analytics_assets(
+    State(svc): State<AppState>,
+    Query(q): Query<YearMonthQuery>,
+) -> impl IntoResponse {
+    let now = chrono::Local::now();
+    let year = q.year.unwrap_or_else(|| now.year());
+    let month = q.month.unwrap_or_else(|| now.month());
+    match svc.get_asset_structure(year, month) {
+        Ok(data) => Json(data).into_response(),
+        Err(e) => internal_error(e).into_response(),
+    }
+}
+
+pub async fn analytics_health(
+    State(svc): State<AppState>,
+    Query(q): Query<YearMonthQuery>,
+) -> impl IntoResponse {
+    let now = chrono::Local::now();
+    let year = q.year.unwrap_or_else(|| now.year());
+    let month = q.month.unwrap_or_else(|| now.month());
+    match svc.get_financial_health(year, month) {
+        Ok(data) => Json(data).into_response(),
+        Err(e) => internal_error(e).into_response(),
+    }
+}
+
+pub async fn analytics_trend(
+    State(svc): State<AppState>,
+    Query(q): Query<TrendMonthsQuery>,
+) -> impl IntoResponse {
+    let months = q.months.unwrap_or(12);
+    match svc.get_asset_trend(months) {
+        Ok(data) => Json(data).into_response(),
+        Err(e) => internal_error(e).into_response(),
+    }
+}
+
+pub async fn smart_defaults(
+    State(svc): State<AppState>,
+    Query(q): Query<YearMonthQuery>,
+) -> impl IntoResponse {
+    let now = chrono::Local::now();
+    let year = q.year.unwrap_or_else(|| now.year());
+    let month = q.month.unwrap_or_else(|| now.month());
+    match svc.get_smart_defaults_for_month(year, month) {
+        Ok(data) => Json(data).into_response(),
+        Err(e) => internal_error(e).into_response(),
+    }
+}
+
 // ── Backup ────────────────────────────────────────────────────────────────────
 
 pub async fn create_backup(
