@@ -25,6 +25,20 @@ fn fmt_balance(b: f64) -> String {
         format!("¥{:.2}", b)
     }
 }
+
+fn fmt_percent(v: f64) -> String {
+    format!("{:.1}%", v * 100.0)
+}
+
+fn fmt_growth(v: Option<f64>) -> (String, Color) {
+    match v {
+        Some(value) if value > 0.0 => (format!("↑{:.1}%", value * 100.0), GREEN),
+        Some(value) if value < 0.0 => (format!("↓{:.1}%", value.abs() * 100.0), RED),
+        Some(_) => ("→0.0%".into(), Color::White),
+        None => ("—".into(), DARK),
+    }
+}
+
 fn active_style() -> Style { Style::default().fg(YELLOW).add_modifier(Modifier::BOLD) }
 fn sel_style() -> Style { Style::default().bg(Color::DarkGray).add_modifier(Modifier::BOLD) }
 
@@ -47,6 +61,7 @@ pub fn render(frame: &mut Frame, app: &mut App) {
         Tab::MonthlyEntry => render_monthly_entry(frame, app, chunks[1]),
         Tab::LargeExpenses => render_large_expenses(frame, app, chunks[1]),
         Tab::Accounts => render_accounts(frame, app, chunks[1]),
+        Tab::Analytics => render_analytics(frame, app, chunks[1]),
     }
 
     // 导入弹窗覆盖在最上层
@@ -86,6 +101,8 @@ fn render_help(frame: &mut Frame, app: &App, area: Rect) {
                 "[a]新增 [d]删除 [↑↓]导航 [Ctrl+E]导出CSV [Ctrl+I]导入CSV",
             Tab::Accounts =>
                 "[a]新建账户 [d]删除 [↑↓]导航 [Ctrl+E]导出CSV [Ctrl+I]导入CSV",
+            Tab::Analytics =>
+                "[←→]切换月份 [Tab]切换标签 [q]退出 [Ctrl+E]导出CSV [Ctrl+I]导入CSV",
         }
     };
     let msg = if let Some(s) = &app.status_msg {
@@ -335,6 +352,114 @@ fn render_monthly_entry(frame: &mut Frame, app: &App, area: Rect) {
             .style(Style::default().fg(if form.editing { YELLOW } else { CYAN })),
         chunks[1],
     );
+}
+
+fn render_analytics(frame: &mut Frame, app: &App, area: Rect) {
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .title(format!(" 📈 财务分析 {}-{:02} ", app.analytics_year, app.analytics_month))
+        .title_style(title_style());
+
+    let (comparison, health, structure) = match (
+        &app.analytics_comparison,
+        &app.analytics_health,
+        &app.analytics_structure,
+    ) {
+        (Some(comparison), Some(health), Some(structure)) => (comparison, health, structure),
+        _ => {
+            frame.render_widget(
+                Paragraph::new("暂无分析数据，请先完成月结")
+                    .block(block)
+                    .alignment(Alignment::Center)
+                    .style(Style::default().fg(DARK)),
+                area,
+            );
+            return;
+        }
+    };
+
+    let (assets_mom, assets_mom_color) = fmt_growth(comparison.assets_mom);
+    let (assets_yoy, assets_yoy_color) = fmt_growth(comparison.assets_yoy);
+    let liabilities_mom = calc_growth_display(
+        comparison.current.total_liabilities,
+        comparison.prev_month.total_liabilities,
+    );
+    let liabilities_yoy = calc_growth_display(
+        comparison.current.total_liabilities,
+        comparison.last_year.total_liabilities,
+    );
+    let (net_mom, net_mom_color) = fmt_growth(comparison.net_worth_mom);
+    let (net_yoy, net_yoy_color) = fmt_growth(comparison.net_worth_yoy);
+
+    let liquid_ratio = structure
+        .by_liquid
+        .iter()
+        .find(|item| item.category == "流动资产")
+        .map(|item| format!("{} ({})", fmt_balance(item.amount), fmt_percent(item.percentage)))
+        .unwrap_or_else(|| "¥0.00 (0.0%)".into());
+    let illiquid_ratio = structure
+        .by_liquid
+        .iter()
+        .find(|item| item.category == "非流动资产")
+        .map(|item| format!("{} ({})", fmt_balance(item.amount), fmt_percent(item.percentage)))
+        .unwrap_or_else(|| "¥0.00 (0.0%)".into());
+
+    let health_color = if health.health_score >= 80.0 {
+        GREEN
+    } else if health.health_score >= 60.0 {
+        CYAN
+    } else if health.health_score >= 40.0 {
+        YELLOW
+    } else {
+        RED
+    };
+    let net_color = if comparison.current.net_worth >= 0.0 { GREEN } else { RED };
+
+    let lines = vec![
+        Line::from(vec![Span::styled(
+            format!("总资产: {}", fmt_balance(comparison.current.total_assets)),
+            Style::default().fg(GREEN).add_modifier(Modifier::BOLD),
+        ), Span::raw("  "), Span::styled(assets_mom, Style::default().fg(assets_mom_color)), Span::raw(" 环比  "), Span::styled(assets_yoy, Style::default().fg(assets_yoy_color)), Span::raw(" 同比")]),
+        Line::from(vec![Span::styled(
+            format!("总负债: {}", fmt_balance(comparison.current.total_liabilities)),
+            Style::default().fg(RED).add_modifier(Modifier::BOLD),
+        ), Span::raw("  "), Span::styled(liabilities_mom.0, Style::default().fg(liabilities_mom.1)), Span::raw(" 环比  "), Span::styled(liabilities_yoy.0, Style::default().fg(liabilities_yoy.1)), Span::raw(" 同比")]),
+        Line::from(vec![Span::styled(
+            format!("净资产: {}", fmt_balance(comparison.current.net_worth)),
+            Style::default().fg(net_color).add_modifier(Modifier::BOLD),
+        ), Span::raw("  "), Span::styled(net_mom, Style::default().fg(net_mom_color)), Span::raw(" 环比  "), Span::styled(net_yoy, Style::default().fg(net_yoy_color)), Span::raw(" 同比")]),
+        Line::from(""),
+        Line::from(Span::styled("资产结构:", Style::default().fg(CYAN).add_modifier(Modifier::BOLD))),
+        Line::from(format!("  流动资产: {liquid_ratio}")),
+        Line::from(format!("  非流动资产: {illiquid_ratio}")),
+        Line::from(""),
+        Line::from(vec![
+            Span::raw(format!("负债率: {}", fmt_percent(health.debt_ratio))),
+            Span::raw("  |  "),
+            Span::raw(format!("流动性: {}", fmt_percent(health.liquidity_ratio))),
+            Span::raw("  |  "),
+            Span::styled(
+                format!("健康评分: {:.0}/100 [{}]", health.health_score, health.health_level),
+                Style::default().fg(health_color).add_modifier(Modifier::BOLD),
+            ),
+        ]),
+        Line::from(""),
+        Line::from(Span::styled("← 上月  |  下月 →", Style::default().fg(DARK))),
+    ];
+
+    frame.render_widget(
+        Paragraph::new(lines)
+            .block(block)
+            .style(Style::default().fg(Color::White)),
+        area,
+    );
+}
+
+fn calc_growth_display(current: f64, previous: f64) -> (String, Color) {
+    if previous.abs() < 1e-9 {
+        return ("—".into(), DARK);
+    }
+    fmt_growth(Some((current - previous) / previous.abs()))
 }
 
 // ── 大额支出 ───────────────────────────────────────────────────────────────────

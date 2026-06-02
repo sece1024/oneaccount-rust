@@ -40,24 +40,26 @@ impl App {
 
         // 全局 Tab 切换（月结编辑状态下不响应）
         if !self.monthly_form.editing && !self.adding_expense && !self.adding_account {
+            let mut next_tab = None;
             match code {
-                KeyCode::Tab => {
-                    self.current_tab = self.current_tab.next();
-                    return Ok(());
-                }
-                KeyCode::BackTab => {
-                    self.current_tab = self.current_tab.prev();
-                    return Ok(());
-                }
-                KeyCode::Char('1') => { self.current_tab = Tab::Overview; return Ok(()); }
+                KeyCode::Tab => next_tab = Some(self.current_tab.next()),
+                KeyCode::BackTab => next_tab = Some(self.current_tab.prev()),
+                KeyCode::Char('1') => next_tab = Some(Tab::Overview),
                 KeyCode::Char('2') => {
                     self.refresh_monthly_form();
-                    self.current_tab = Tab::MonthlyEntry;
-                    return Ok(());
+                    next_tab = Some(Tab::MonthlyEntry);
                 }
-                KeyCode::Char('3') => { self.current_tab = Tab::LargeExpenses; return Ok(()); }
-                KeyCode::Char('4') => { self.current_tab = Tab::Accounts; return Ok(()); }
+                KeyCode::Char('3') => next_tab = Some(Tab::LargeExpenses),
+                KeyCode::Char('4') => next_tab = Some(Tab::Accounts),
+                KeyCode::Char('5') => next_tab = Some(Tab::Analytics),
                 _ => {}
+            }
+            if let Some(tab) = next_tab {
+                self.current_tab = tab;
+                if self.current_tab == Tab::Analytics {
+                    self.refresh_analytics();
+                }
+                return Ok(());
             }
         }
 
@@ -66,6 +68,7 @@ impl App {
             Tab::MonthlyEntry => self.handle_monthly_entry(code, modifiers)?,
             Tab::LargeExpenses => self.handle_large_expenses(code, modifiers)?,
             Tab::Accounts => self.handle_accounts(code, modifiers)?,
+            Tab::Analytics => self.handle_analytics(code, modifiers)?,
         }
         Ok(())
     }
@@ -330,6 +333,29 @@ impl App {
                 ExpenseField::Date => handle_text(&mut self.expense_form.date, code),
                 ExpenseField::Note => handle_text(&mut self.expense_form.note, code),
             },
+        }
+        Ok(())
+    }
+
+    fn handle_analytics(&mut self, code: KeyCode, _modifiers: KeyModifiers) -> Result<()> {
+        match code {
+            KeyCode::Char('q') => self.should_quit = true,
+            KeyCode::Left => {
+                let (y, m) = prev_month(self.analytics_year, self.analytics_month);
+                self.analytics_year = y;
+                self.analytics_month = m;
+                self.refresh_analytics();
+            }
+            KeyCode::Right => {
+                let now = chrono::Local::now();
+                let (y, m) = next_month(self.analytics_year, self.analytics_month);
+                if y < now.year() || (y == now.year() && m <= now.month()) {
+                    self.analytics_year = y;
+                    self.analytics_month = m;
+                    self.refresh_analytics();
+                }
+            }
+            _ => {}
         }
         Ok(())
     }

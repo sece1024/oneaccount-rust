@@ -54,6 +54,7 @@ pub enum Tab {
     MonthlyEntry = 1,  // 月结
     LargeExpenses = 2, // 大额支出
     Accounts = 3,      // 账户管理
+    Analytics = 4,     // 分析
 }
 
 impl Tab {
@@ -62,19 +63,21 @@ impl Tab {
             Tab::Overview => Tab::MonthlyEntry,
             Tab::MonthlyEntry => Tab::LargeExpenses,
             Tab::LargeExpenses => Tab::Accounts,
-            Tab::Accounts => Tab::Overview,
+            Tab::Accounts => Tab::Analytics,
+            Tab::Analytics => Tab::Overview,
         }
     }
     pub fn prev(self) -> Tab {
         match self {
-            Tab::Overview => Tab::Accounts,
+            Tab::Overview => Tab::Analytics,
             Tab::MonthlyEntry => Tab::Overview,
             Tab::LargeExpenses => Tab::MonthlyEntry,
             Tab::Accounts => Tab::LargeExpenses,
+            Tab::Analytics => Tab::Accounts,
         }
     }
-    pub fn names() -> [&'static str; 4] {
-        ["📊 资产总览", "📅 月结", "💸 大额支出", "💳 账户管理"]
+    pub fn names() -> [&'static str; 5] {
+        ["📊 资产总览", "📅 月结", "💸 大额支出", "💳 账户管理", "📈 分析"]
     }
     pub fn index(self) -> usize {
         self as usize
@@ -314,6 +317,13 @@ pub struct App {
     pub trend: Vec<MonthlyTotal>,
     pub overview_selected: usize,
 
+    // 分析
+    pub analytics_year: i32,
+    pub analytics_month: u32,
+    pub analytics_comparison: Option<crate::service::MonthlyComparison>,
+    pub analytics_health: Option<crate::service::FinancialHealth>,
+    pub analytics_structure: Option<crate::service::AssetStructure>,
+
     // 月结
     pub monthly_form: MonthlyForm,
 
@@ -362,6 +372,11 @@ impl App {
             status_msg: None,
             trend,
             overview_selected: 0,
+            analytics_year: now.year(),
+            analytics_month: now.month(),
+            analytics_comparison: None,
+            analytics_health: None,
+            analytics_structure: None,
             monthly_form,
             large_expenses,
             expense_selected: 0,
@@ -383,6 +398,14 @@ impl App {
 
     pub fn refresh_trend(&mut self) {
         self.trend = self.service.asset_trend(24).unwrap_or_default();
+    }
+
+    pub fn refresh_analytics(&mut self) {
+        let y = self.analytics_year;
+        let m = self.analytics_month;
+        self.analytics_comparison = self.service.get_monthly_comparison(y, m).ok();
+        self.analytics_health = self.service.get_financial_health(y, m).ok();
+        self.analytics_structure = self.service.get_asset_structure(y, m).ok();
     }
 
     pub fn refresh_monthly_form(&mut self) {
