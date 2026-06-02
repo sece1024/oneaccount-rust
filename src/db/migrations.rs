@@ -107,11 +107,6 @@ CREATE INDEX IF NOT EXISTS idx_tx_account_id   ON transactions(account_id);
 CREATE INDEX IF NOT EXISTS idx_tx_category_id  ON transactions(category_id);
 CREATE INDEX IF NOT EXISTS idx_snap_ym         ON balance_snapshots(year, month);
 CREATE INDEX IF NOT EXISTS idx_snap_account    ON balance_snapshots(account_id);
-CREATE INDEX IF NOT EXISTS idx_snap_year_month ON balance_snapshots(year_month);
-CREATE INDEX IF NOT EXISTS idx_snap_history_sid ON snapshot_history(snapshot_id);
-CREATE INDEX IF NOT EXISTS idx_manalytics_ym   ON monthly_analytics(year, month);
-CREATE INDEX IF NOT EXISTS idx_amstats_ym      ON account_monthly_stats(year, month);
-CREATE INDEX IF NOT EXISTS idx_amstats_aid     ON account_monthly_stats(account_id);
 ";
 
 /// 对可能已存在的旧 DB 进行安全的增量迁移（忽略"列已存在"错误）
@@ -146,6 +141,23 @@ fn apply_incremental_migrations(conn: &Connection) -> Result<()> {
     // 添加 prev_balance（上月余额）
     let _ = conn.execute_batch(
         "ALTER TABLE balance_snapshots ADD COLUMN prev_balance REAL;",
+    );
+
+    // 索引：新列和新表（放在列添加之后，避免旧 DB 找不到列）
+    let _ = conn.execute_batch(
+        "CREATE INDEX IF NOT EXISTS idx_snap_year_month  ON balance_snapshots(year_month);",
+    );
+    let _ = conn.execute_batch(
+        "CREATE INDEX IF NOT EXISTS idx_snap_history_sid ON snapshot_history(snapshot_id);",
+    );
+    let _ = conn.execute_batch(
+        "CREATE INDEX IF NOT EXISTS idx_manalytics_ym    ON monthly_analytics(year, month);",
+    );
+    let _ = conn.execute_batch(
+        "CREATE INDEX IF NOT EXISTS idx_amstats_ym       ON account_monthly_stats(year, month);",
+    );
+    let _ = conn.execute_batch(
+        "CREATE INDEX IF NOT EXISTS idx_amstats_aid      ON account_monthly_stats(account_id);",
     );
 
     // 回填历史数据：year_month
