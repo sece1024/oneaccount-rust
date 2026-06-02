@@ -18,6 +18,9 @@ pub struct AccountSnapshot {
     pub account_name: String,
     pub account_type: String,
     pub balance: f64,
+    pub year_month: i32,      // 冗余列: year * 100 + month
+    pub balance_delta: Option<f64>, // 与上月的差额
+    pub prev_balance: Option<f64>,  // 上月余额
     pub note: Option<String>,
     pub created_at: String,
 }

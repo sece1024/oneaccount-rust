@@ -12,8 +12,11 @@ fn map_row(row: &rusqlite::Row) -> rusqlite::Result<AccountSnapshot> {
         account_name: row.get(4)?,
         account_type: row.get(5)?,
         balance: row.get(6)?,
-        note: row.get(7)?,
-        created_at: row.get(8)?,
+        year_month: row.get(7)?,
+        balance_delta: row.get(8)?,
+        prev_balance: row.get(9)?,
+        note: row.get(10)?,
+        created_at: row.get(11)?,
     })
 }
 
@@ -30,14 +33,32 @@ impl SnapshotDao {
         note: Option<&str>,
     ) -> Result<()> {
         let now = chrono::Local::now().to_rfc3339();
+        let year_month = year * 100 + month as i32;
+
+        // 查找上月余额
+        let prev_balance: Option<f64> = conn
+            .query_row(
+                "SELECT balance FROM balance_snapshots
+                 WHERE account_id = ?1 AND year_month < ?2
+                 ORDER BY year_month DESC LIMIT 1",
+                params![account_id, year_month],
+                |r| r.get(0),
+            )
+            .ok();
+
+        let balance_delta = prev_balance.map(|prev| balance - prev);
+
         conn.execute(
-            "INSERT INTO balance_snapshots (year, month, account_id, balance, note, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+            "INSERT INTO balance_snapshots (year, month, account_id, balance, year_month, balance_delta, prev_balance, note, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
              ON CONFLICT(year, month, account_id) DO UPDATE SET
-                 balance    = excluded.balance,
-                 note       = excluded.note,
-                 created_at = excluded.created_at",
-            params![year, month, account_id, balance, note, now],
+                 balance        = excluded.balance,
+                 year_month     = excluded.year_month,
+                 balance_delta  = excluded.balance_delta,
+                 prev_balance   = excluded.prev_balance,
+                 note           = excluded.note,
+                 created_at     = excluded.created_at",
+            params![year, month as i32, account_id, balance, year_month, balance_delta, prev_balance, note, now],
         )?;
         Ok(())
     }
@@ -46,7 +67,9 @@ impl SnapshotDao {
     pub fn find_month(conn: &Connection, year: i32, month: u32) -> Result<Vec<AccountSnapshot>> {
         let mut stmt = conn.prepare(
             "SELECT bs.id, bs.year, bs.month, bs.account_id,
-                    a.name, a.account_type, bs.balance, bs.note, bs.created_at
+                    a.name, a.account_type, bs.balance,
+                    bs.year_month, bs.balance_delta, bs.prev_balance,
+                    bs.note, bs.created_at
              FROM balance_snapshots bs
              JOIN accounts a ON bs.account_id = a.id
              WHERE bs.year = ?1 AND bs.month = ?2
@@ -112,7 +135,9 @@ impl SnapshotDao {
     pub fn find_recent_months(conn: &Connection, limit: i64) -> Result<Vec<AccountSnapshot>> {
         let mut stmt = conn.prepare(
             "SELECT bs.id, bs.year, bs.month, bs.account_id,
-                    a.name, a.account_type, bs.balance, bs.note, bs.created_at
+                    a.name, a.account_type, bs.balance,
+                    bs.year_month, bs.balance_delta, bs.prev_balance,
+                    bs.note, bs.created_at
              FROM balance_snapshots bs
              JOIN accounts a ON bs.account_id = a.id
              WHERE (bs.year, bs.month) IN (

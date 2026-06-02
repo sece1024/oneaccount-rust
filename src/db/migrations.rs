@@ -46,13 +46,59 @@ CREATE TABLE IF NOT EXISTS transactions (
 
 -- 月结快照：记录每个账户每月底余额
 CREATE TABLE IF NOT EXISTS balance_snapshots (
-    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    year       INTEGER NOT NULL,
-    month      INTEGER NOT NULL,
-    account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
-    balance    REAL    NOT NULL,
-    note       TEXT,
-    created_at TEXT    NOT NULL,
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    year           INTEGER NOT NULL,
+    month          INTEGER NOT NULL,
+    account_id     INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    balance        REAL    NOT NULL,
+    year_month     INTEGER NOT NULL DEFAULT 0, -- 冗余列: year * 100 + month，加速聚合
+    balance_delta  REAL,                       -- 与上月的差额
+    prev_balance   REAL,                       -- 上月余额
+    note           TEXT,
+    created_at     TEXT    NOT NULL,
+    UNIQUE(year, month, account_id)
+);
+
+-- 快照历史表：支持撤销操作
+CREATE TABLE IF NOT EXISTS snapshot_history (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    snapshot_id   INTEGER NOT NULL REFERENCES balance_snapshots(id) ON DELETE CASCADE,
+    old_balance   REAL,
+    new_balance   REAL NOT NULL,
+    changed_at    TEXT NOT NULL,
+    change_reason TEXT -- 'initial', 'edit', 'undo'
+);
+
+-- 月度分析聚合表：预计算同比/环比数据
+CREATE TABLE IF NOT EXISTS monthly_analytics (
+    id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+    year                  INTEGER NOT NULL,
+    month                 INTEGER NOT NULL,
+    total_assets          REAL NOT NULL DEFAULT 0.0,
+    total_liabilities     REAL NOT NULL DEFAULT 0.0,
+    net_worth             REAL NOT NULL DEFAULT 0.0,
+    liquid_assets         REAL NOT NULL DEFAULT 0.0,
+    illiquid_assets       REAL NOT NULL DEFAULT 0.0,
+    assets_mom_change     REAL, -- 环比变化率
+    assets_yoy_change     REAL, -- 同比变化率
+    net_worth_mom_change  REAL,
+    net_worth_yoy_change  REAL,
+    account_count         INTEGER NOT NULL DEFAULT 0,
+    updated_at            TEXT NOT NULL,
+    UNIQUE(year, month)
+);
+
+-- 账户月度统计表：按账户维度预计算
+CREATE TABLE IF NOT EXISTS account_monthly_stats (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    year            INTEGER NOT NULL,
+    month           INTEGER NOT NULL,
+    account_id      INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    balance         REAL NOT NULL DEFAULT 0.0,
+    balance_delta   REAL, -- 与上月差额
+    growth_rate     REAL, -- 增长率
+    asset_ratio     REAL, -- 占总资产比例
+    updated_at      TEXT NOT NULL,
     UNIQUE(year, month, account_id)
 );
 
@@ -61,6 +107,11 @@ CREATE INDEX IF NOT EXISTS idx_tx_account_id   ON transactions(account_id);
 CREATE INDEX IF NOT EXISTS idx_tx_category_id  ON transactions(category_id);
 CREATE INDEX IF NOT EXISTS idx_snap_ym         ON balance_snapshots(year, month);
 CREATE INDEX IF NOT EXISTS idx_snap_account    ON balance_snapshots(account_id);
+CREATE INDEX IF NOT EXISTS idx_snap_year_month ON balance_snapshots(year_month);
+CREATE INDEX IF NOT EXISTS idx_snap_history_sid ON snapshot_history(snapshot_id);
+CREATE INDEX IF NOT EXISTS idx_manalytics_ym   ON monthly_analytics(year, month);
+CREATE INDEX IF NOT EXISTS idx_amstats_ym      ON account_monthly_stats(year, month);
+CREATE INDEX IF NOT EXISTS idx_amstats_aid     ON account_monthly_stats(account_id);
 ";
 
 /// 对可能已存在的旧 DB 进行安全的增量迁移（忽略"列已存在"错误）
@@ -82,6 +133,51 @@ fn apply_incremental_migrations(conn: &Connection) -> Result<()> {
          WHERE is_liquid = 1
            AND account_type IN ('social_insurance','fund','stock','crypto');",
     );
+
+    // ── Phase 1: 月结快照优化 ──────────────────────────────────────────────
+    // 添加冗余时间列 year_month
+    let _ = conn.execute_batch(
+        "ALTER TABLE balance_snapshots ADD COLUMN year_month INTEGER NOT NULL DEFAULT 0;",
+    );
+    // 添加 balance_delta（与上月差额）
+    let _ = conn.execute_batch(
+        "ALTER TABLE balance_snapshots ADD COLUMN balance_delta REAL;",
+    );
+    // 添加 prev_balance（上月余额）
+    let _ = conn.execute_batch(
+        "ALTER TABLE balance_snapshots ADD COLUMN prev_balance REAL;",
+    );
+
+    // 回填历史数据：year_month
+    conn.execute_batch(
+        "UPDATE balance_snapshots SET year_month = year * 100 + month WHERE year_month = 0;",
+    )?;
+
+    // 回填历史数据：prev_balance 和 balance_delta
+    conn.execute_batch(
+        "UPDATE balance_snapshots SET
+            prev_balance = (
+                SELECT bs2.balance FROM balance_snapshots bs2
+                WHERE bs2.account_id = balance_snapshots.account_id
+                AND bs2.year * 100 + bs2.month = (
+                    SELECT MAX(year * 100 + month) FROM balance_snapshots bs3
+                    WHERE bs3.account_id = balance_snapshots.account_id
+                    AND bs3.year * 100 + bs3.month < balance_snapshots.year_month
+                )
+            ),
+            balance_delta = balance - COALESCE(
+                (SELECT bs2.balance FROM balance_snapshots bs2
+                 WHERE bs2.account_id = balance_snapshots.account_id
+                 AND bs2.year * 100 + bs2.month = (
+                     SELECT MAX(year * 100 + month) FROM balance_snapshots bs3
+                     WHERE bs3.account_id = balance_snapshots.account_id
+                     AND bs3.year * 100 + bs3.month < balance_snapshots.year_month
+                 )),
+                balance
+            )
+        WHERE prev_balance IS NULL;",
+    )?;
+
     Ok(())
 }
 
