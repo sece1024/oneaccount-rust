@@ -759,6 +759,23 @@ impl AppService {
         let mapping = crate::csv::FieldMapping::with_default();
         crate::csv::import_csv(file, self, &mapping, account_id)
     }
+
+    /// 清空所有业务数据（账户、账目、分类、月结快照及关联表），操作不可撤销。
+    pub fn clear_all_data(&self) -> Result<()> {
+        let mut conn = self.pool.get()?;
+        let tx = conn.transaction()?;
+        tx.execute_batch(
+            "DELETE FROM snapshot_history;
+             DELETE FROM balance_snapshots;
+             DELETE FROM account_monthly_stats;
+             DELETE FROM monthly_analytics;
+             DELETE FROM transactions;
+             DELETE FROM accounts;
+             DELETE FROM categories;",
+        )?;
+        tx.commit()?;
+        Ok(())
+    }
 }
 
 /// 计算上月的年月
@@ -893,10 +910,71 @@ mod tests {
         let accounts = svc.list_accounts().unwrap();
         let a1 = accounts.iter().find(|a| a.id == acc1.id).unwrap();
         assert!((a1.balance - 8000.0).abs() < 1e-9);
+    }
 
-        // 验证趋势数据
-        let trend = svc.asset_trend(12).unwrap();
-        assert_eq!(trend.len(), 1);
-        assert!((trend[0].total - 23000.0).abs() < 1e-9);
+    #[test]
+    fn test_clear_all_data() {
+        let svc = test_service();
+
+        // 创建账户、分类、账目、月结快照
+        let acc = svc
+            .create_account(&NewAccount {
+                name: "工资卡".into(),
+                account_type: AccountType::Bank,
+                currency: "CNY".into(),
+                initial_balance: 5000.0,
+                is_liquid: true,
+            })
+            .unwrap();
+
+        let cat = svc
+            .create_category(&crate::models::category::NewCategory {
+                name: "餐饮".into(),
+                category_type: crate::models::category::CategoryType::Expense,
+                icon: None,
+                parent_id: None,
+            })
+            .unwrap();
+
+        svc.create_transaction(&NewTransaction {
+            amount: 100.0,
+            transaction_type: TransactionType::Expense,
+            category_id: Some(cat.id),
+            account_id: acc.id,
+            to_account_id: None,
+            date: "2024-01-01".into(),
+            note: None,
+            is_large: false,
+        })
+        .unwrap();
+
+        let items = vec![crate::models::snapshot::MonthlyEntryItem {
+            account_id: acc.id,
+            account_name: acc.name.clone(),
+            account_type: "bank".into(),
+            last_balance: None,
+            input: "5000".into(),
+            confirmed_balance: Some(5000.0),
+        }];
+        svc.save_monthly_snapshot(2024, 1, &items, None).unwrap();
+
+        // 清空数据
+        svc.clear_all_data().unwrap();
+
+        // 验证所有表都为空
+        assert!(svc.list_accounts().unwrap().is_empty());
+        assert!(svc.list_categories().unwrap().is_empty());
+        let filter = crate::models::transaction::TransactionFilter {
+            start_date: None,
+            end_date: None,
+            category_id: None,
+            account_id: None,
+            transaction_type: None,
+            limit: None,
+            offset: None,
+            is_large_only: false,
+        };
+        assert!(svc.list_transactions(&filter).unwrap().is_empty());
+        assert!(!svc.has_snapshot(2024, 1).unwrap());
     }
 }

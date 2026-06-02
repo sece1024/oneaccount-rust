@@ -343,6 +343,9 @@ pub struct App {
     // CSV 导入弹窗
     pub show_import: bool,
     pub import_form: ImportForm,
+
+    // 清空数据确认弹窗
+    pub show_clear_confirm: bool,
 }
 
 impl App {
@@ -393,11 +396,35 @@ impl App {
                 account_idx: 0,
                 active_field: ImportField::FilePath,
             },
+            show_clear_confirm: false,
         })
     }
 
     pub fn refresh_trend(&mut self) {
         self.trend = self.service.asset_trend(24).unwrap_or_default();
+    }
+
+    /// 清空所有数据并刷新全部 UI 状态
+    pub fn clear_all_data(&mut self) -> crate::error::Result<()> {
+        self.service.clear_all_data()?;
+
+        // 刷新所有 UI 状态
+        let now = chrono::Local::now();
+        self.trend = Vec::new();
+        self.accounts = Vec::new();
+        self.large_expenses = Vec::new();
+        self.expense_form.accounts = Vec::new();
+        self.expense_form.categories = Vec::new();
+        self.monthly_form = MonthlyForm::new(now.year(), now.month(), Vec::new(), false);
+        self.analytics_comparison = None;
+        self.analytics_health = None;
+        self.analytics_structure = None;
+        self.overview_selected = 0;
+        self.expense_selected = 0;
+        self.acc_selected = 0;
+
+        self.status_msg = Some("🗑 所有数据已清空".into());
+        Ok(())
     }
 
     pub fn refresh_analytics(&mut self) {

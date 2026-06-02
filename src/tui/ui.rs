@@ -68,6 +68,11 @@ pub fn render(frame: &mut Frame, app: &mut App) {
     if app.show_import {
         render_import_modal(frame, app, area);
     }
+
+    // 清空确认弹窗覆盖在最上层
+    if app.show_clear_confirm {
+        render_clear_confirm_modal(frame, area);
+    }
 }
 
 // ── Tab 栏 ────────────────────────────────────────────────────────────────────
@@ -89,20 +94,22 @@ fn render_tabs(frame: &mut Frame, app: &App, area: Rect) {
 // ── 帮助栏 ────────────────────────────────────────────────────────────────────
 
 fn render_help(frame: &mut Frame, app: &App, area: Rect) {
-    let hint = if app.show_import {
+    let hint = if app.show_clear_confirm {
+        "⚠️  清空所有数据  │  [y]确认清空  [Esc/n]取消"
+    } else if app.show_import {
         "[Tab]切换字段  [←→]选择账户  [Enter/Ctrl+S]确认导入  [Esc]取消"
     } else {
         match app.current_tab {
             Tab::Overview =>
-                "[q]退出 [Tab]切换 [↑↓]选择 [r]刷新 [Ctrl+E]导出CSV [Ctrl+I]导入CSV",
+                "[q]退出 [Tab]切换 [↑↓]选择 [r]刷新 [Ctrl+E]导出CSV [Ctrl+I]导入CSV [Ctrl+X]清空数据",
             Tab::MonthlyEntry =>
                 "[Enter]编辑余额 [Tab/Enter]下一个 [←→]切换月份 [Ctrl+S]保存月结 [Ctrl+E]导出 [Ctrl+I]导入",
             Tab::LargeExpenses =>
-                "[a]新增 [d]删除 [↑↓]导航 [Ctrl+E]导出CSV [Ctrl+I]导入CSV",
+                "[a]新增 [d]删除 [↑↓]导航 [Ctrl+E]导出CSV [Ctrl+I]导入CSV [Ctrl+X]清空数据",
             Tab::Accounts =>
-                "[a]新建账户 [d]删除 [↑↓]导航 [Ctrl+E]导出CSV [Ctrl+I]导入CSV",
+                "[a]新建账户 [d]删除 [↑↓]导航 [Ctrl+E]导出CSV [Ctrl+I]导入CSV [Ctrl+X]清空数据",
             Tab::Analytics =>
-                "[←→]切换月份 [Tab]切换标签 [q]退出 [Ctrl+E]导出CSV [Ctrl+I]导入CSV",
+                "[←→]切换月份 [Tab]切换标签 [q]退出 [Ctrl+E]导出CSV [Ctrl+I]导入CSV [Ctrl+X]清空数据",
         }
     };
     let msg = if let Some(s) = &app.status_msg {
@@ -707,6 +714,48 @@ fn render_import_modal(frame: &mut Frame, app: &App, area: Rect) {
     )
     .style(Style::default().fg(DARK));
     frame.render_widget(hint, chunks[2]);
+}
+
+// ── 清空数据确认弹窗 ───────────────────────────────────────────────────────────
+
+fn render_clear_confirm_modal(frame: &mut Frame, area: Rect) {
+    let modal_area = centered_rect(60, 55, area);
+    frame.render_widget(Clear, modal_area);
+
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(RED))
+        .title(Span::styled(
+            " ⚠️  清空所有数据 ",
+            Style::default().fg(RED).add_modifier(Modifier::BOLD),
+        ));
+
+    let text = vec![
+        Line::from(""),
+        Line::from(Span::styled("此操作将永久删除：", Style::default().fg(Color::White).add_modifier(Modifier::BOLD))),
+        Line::from(""),
+        Line::from(Span::styled("  • 所有账户（含余额记录）", Style::default().fg(YELLOW))),
+        Line::from(Span::styled("  • 所有账目流水", Style::default().fg(YELLOW))),
+        Line::from(Span::styled("  • 所有分类", Style::default().fg(YELLOW))),
+        Line::from(Span::styled("  • 所有月结快照及历史", Style::default().fg(YELLOW))),
+        Line::from(Span::styled("  • 所有分析聚合数据", Style::default().fg(YELLOW))),
+        Line::from(""),
+        Line::from(Span::styled("⚠️  操作不可撤销，建议先备份！", Style::default().fg(RED).add_modifier(Modifier::BOLD))),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled("  按 ", Style::default().fg(DARK)),
+            Span::styled("[y]", Style::default().fg(RED).add_modifier(Modifier::BOLD)),
+            Span::styled(" 确认清空    按 ", Style::default().fg(DARK)),
+            Span::styled("[Esc/n]", Style::default().fg(GREEN).add_modifier(Modifier::BOLD)),
+            Span::styled(" 取消", Style::default().fg(DARK)),
+        ]),
+    ];
+
+    let paragraph = Paragraph::new(text)
+        .block(block)
+        .alignment(Alignment::Left);
+
+    frame.render_widget(paragraph, modal_area);
 }
 
 // ── 工具 ──────────────────────────────────────────────────────────────────────

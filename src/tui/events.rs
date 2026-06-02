@@ -29,8 +29,18 @@ impl App {
                     }
                     return Ok(());
                 }
+                // Ctrl+X 打开「清空所有数据」确认弹窗
+                KeyCode::Char('x') => {
+                    self.show_clear_confirm = true;
+                    return Ok(());
+                }
                 _ => {}
             }
+        }
+
+        // 清空确认弹窗打开时独占键盘
+        if self.show_clear_confirm {
+            return self.handle_clear_confirm(code);
         }
 
         // 导入弹窗打开时独占键盘
@@ -418,6 +428,24 @@ impl App {
                 self.new_acc_type_idx = (self.new_acc_type_idx + 1) % len;
             }
             _ => handle_text(&mut self.new_acc_name, code),
+        }
+        Ok(())
+    }
+
+    fn handle_clear_confirm(&mut self, code: KeyCode) -> Result<()> {
+        match code {
+            KeyCode::Char('y') | KeyCode::Char('Y') => {
+                self.show_clear_confirm = false;
+                match self.clear_all_data() {
+                    Ok(()) => {}
+                    Err(e) => self.status_msg = Some(format!("❌ 清空失败: {e}")),
+                }
+            }
+            KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {
+                self.show_clear_confirm = false;
+                self.status_msg = Some("已取消".into());
+            }
+            _ => {}
         }
         Ok(())
     }
