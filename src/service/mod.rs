@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use chrono::Datelike;
 use serde::Serialize;
 
 use crate::dao::{AccountDao, CategoryDao, SnapshotDao, TransactionDao};
@@ -43,6 +44,88 @@ pub struct SmartEntry {
     pub currency: String,
     pub last_balance: Option<f64>,
     pub suggested_balance: Option<f64>,
+}
+
+#[derive(Serialize)]
+pub struct MonthSnapshotSummary {
+    pub year: i32,
+    pub month: u32,
+    pub total_assets: f64,
+    pub total_liabilities: f64,
+    pub net_worth: f64,
+    pub liquid_assets: f64,
+    pub illiquid_assets: f64,
+    pub account_count: usize,
+}
+
+#[derive(Serialize)]
+pub struct MonthlyComparison {
+    pub year: i32,
+    pub month: u32,
+    pub current: MonthSnapshotSummary,
+    pub prev_month: MonthSnapshotSummary,
+    pub last_year: MonthSnapshotSummary,
+    pub assets_mom: Option<f64>,
+    pub assets_yoy: Option<f64>,
+    pub net_worth_mom: Option<f64>,
+    pub net_worth_yoy: Option<f64>,
+}
+
+#[derive(Serialize)]
+pub struct TypeRatio {
+    pub name: String,
+    pub amount: f64,
+    pub percentage: f64,
+}
+
+#[derive(Serialize)]
+pub struct LiquidRatio {
+    pub category: String,
+    pub amount: f64,
+    pub percentage: f64,
+}
+
+#[derive(Serialize)]
+pub struct CurrencyRatio {
+    pub currency: String,
+    pub amount: f64,
+    pub percentage: f64,
+}
+
+#[derive(Serialize)]
+pub struct AssetStructure {
+    pub year: i32,
+    pub month: u32,
+    pub total_assets: f64,
+    pub total_liabilities: f64,
+    pub net_worth: f64,
+    pub by_type: Vec<TypeRatio>,
+    pub by_liquid: Vec<LiquidRatio>,
+    pub by_currency: Vec<CurrencyRatio>,
+}
+
+#[derive(Serialize)]
+pub struct FinancialHealth {
+    pub year: i32,
+    pub month: u32,
+    pub debt_ratio: f64,
+    pub liquidity_ratio: f64,
+    pub asset_growth_mom: Option<f64>,
+    pub asset_growth_yoy: Option<f64>,
+    pub net_worth_growth_mom: Option<f64>,
+    pub net_worth_growth_yoy: Option<f64>,
+    pub health_score: f64,
+    pub health_level: String,
+}
+
+#[derive(Serialize)]
+pub struct TrendPoint {
+    pub year: i32,
+    pub month: u32,
+    pub total_assets: f64,
+    pub total_liabilities: f64,
+    pub net_worth: f64,
+    pub assets_mom: Option<f64>,
 }
 
 pub struct AppService {
@@ -337,6 +420,225 @@ impl AppService {
         })
     }
 
+    /// 获取单月快照摘要（内部辅助）
+    fn get_month_snapshot_summary(
+        &self,
+        conn: &rusqlite::Connection,
+        year: i32,
+        month: u32,
+    ) -> Result<MonthSnapshotSummary> {
+        use crate::models::account::AccountType;
+
+        let snapshots = SnapshotDao::find_month(conn, year, month)?;
+        let mut total_assets = 0.0_f64;
+        let mut total_liabilities = 0.0_f64;
+        let mut liquid_assets = 0.0_f64;
+        let mut illiquid_assets = 0.0_f64;
+
+        for snap in &snapshots {
+            if let Some(acc) = AccountDao::find_by_id(conn, snap.account_id)? {
+                match acc.account_type {
+                    AccountType::CreditCard => {
+                        total_liabilities += snap.balance.abs();
+                    }
+                    _ => {
+                        total_assets += snap.balance;
+                        if acc.is_liquid {
+                            liquid_assets += snap.balance;
+                        } else {
+                            illiquid_assets += snap.balance;
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(MonthSnapshotSummary {
+            year,
+            month,
+            total_assets,
+            total_liabilities,
+            net_worth: total_assets - total_liabilities,
+            liquid_assets,
+            illiquid_assets,
+            account_count: snapshots.len(),
+        })
+    }
+
+    /// 获取月度对比数据（环比 + 同比）
+    pub fn get_monthly_comparison(&self, year: i32, month: u32) -> Result<MonthlyComparison> {
+        let conn = self.pool.get()?;
+        let current = self.get_month_snapshot_summary(&conn, year, month)?;
+        let (prev_y, prev_m) = prev_month(year, month);
+        let prev = self.get_month_snapshot_summary(&conn, prev_y, prev_m)?;
+        let last_year = self.get_month_snapshot_summary(&conn, year - 1, month)?;
+
+        Ok(MonthlyComparison {
+            year,
+            month,
+            assets_mom: calc_growth_rate(current.total_assets, prev.total_assets),
+            assets_yoy: calc_growth_rate(current.total_assets, last_year.total_assets),
+            net_worth_mom: calc_growth_rate(current.net_worth, prev.net_worth),
+            net_worth_yoy: calc_growth_rate(current.net_worth, last_year.net_worth),
+            current,
+            prev_month: prev,
+            last_year,
+        })
+    }
+
+    /// 获取资产结构分析
+    pub fn get_asset_structure(&self, year: i32, month: u32) -> Result<AssetStructure> {
+        use crate::models::account::AccountType;
+        use std::collections::HashMap;
+
+        let conn = self.pool.get()?;
+        let snapshots = SnapshotDao::find_month(&conn, year, month)?;
+
+        let mut by_type: HashMap<String, f64> = HashMap::new();
+        let mut by_liquid: HashMap<String, f64> = HashMap::new();
+        let mut by_currency: HashMap<String, f64> = HashMap::new();
+        let mut total_assets = 0.0_f64;
+        let mut total_liabilities = 0.0_f64;
+
+        for snap in &snapshots {
+            if let Some(acc) = AccountDao::find_by_id(&conn, snap.account_id)? {
+                let type_name = acc.account_type.display_name().to_string();
+                *by_type.entry(type_name).or_insert(0.0) += snap.balance;
+
+                match acc.account_type {
+                    AccountType::CreditCard => {
+                        total_liabilities += snap.balance.abs();
+                    }
+                    _ => {
+                        total_assets += snap.balance;
+                        let liquid_key = if acc.is_liquid { "流动资产" } else { "非流动资产" }.to_string();
+                        *by_liquid.entry(liquid_key).or_insert(0.0) += snap.balance;
+                    }
+                }
+                *by_currency.entry(acc.currency.clone()).or_insert(0.0) += snap.balance;
+            }
+        }
+
+        let by_type_vec = by_type
+            .into_iter()
+            .map(|(name, amount)| TypeRatio {
+                percentage: if total_assets > 1e-9 { amount / total_assets } else { 0.0 },
+                name,
+                amount,
+            })
+            .collect();
+
+        let by_liquid_vec = by_liquid
+            .into_iter()
+            .map(|(category, amount)| LiquidRatio {
+                percentage: if total_assets > 1e-9 { amount / total_assets } else { 0.0 },
+                category,
+                amount,
+            })
+            .collect();
+
+        let by_currency_vec = by_currency
+            .into_iter()
+            .map(|(currency, amount)| CurrencyRatio {
+                percentage: if total_assets > 1e-9 { amount / total_assets } else { 0.0 },
+                currency,
+                amount,
+            })
+            .collect();
+
+        Ok(AssetStructure {
+            year,
+            month,
+            total_assets,
+            total_liabilities,
+            net_worth: total_assets - total_liabilities,
+            by_type: by_type_vec,
+            by_liquid: by_liquid_vec,
+            by_currency: by_currency_vec,
+        })
+    }
+
+    /// 获取财务健康指标
+    pub fn get_financial_health(&self, year: i32, month: u32) -> Result<FinancialHealth> {
+        let conn = self.pool.get()?;
+        let current = self.get_month_snapshot_summary(&conn, year, month)?;
+        let (prev_y, prev_m) = prev_month(year, month);
+        let prev = self.get_month_snapshot_summary(&conn, prev_y, prev_m)?;
+        let last_year = self.get_month_snapshot_summary(&conn, year - 1, month)?;
+
+        let debt_ratio = if current.total_assets > 1e-9 {
+            current.total_liabilities / current.total_assets
+        } else {
+            0.0
+        };
+
+        let liquidity_ratio = if current.total_assets > 1e-9 {
+            current.liquid_assets / current.total_assets
+        } else {
+            0.0
+        };
+
+        let asset_growth_mom = calc_growth_rate(current.total_assets, prev.total_assets);
+        let asset_growth_yoy = calc_growth_rate(current.total_assets, last_year.total_assets);
+        let net_worth_growth_mom = calc_growth_rate(current.net_worth, prev.net_worth);
+        let net_worth_growth_yoy = calc_growth_rate(current.net_worth, last_year.net_worth);
+
+        let mut score = 100.0_f64;
+        if debt_ratio > 0.5 { score -= (debt_ratio - 0.5) * 100.0; }
+        if liquidity_ratio > 0.3 { score += (liquidity_ratio - 0.3) * 20.0; }
+        if let Some(g) = asset_growth_mom {
+            if g > 0.0 { score += g * 10.0; } else { score += g * 5.0; }
+        }
+        let health_score = score.clamp(0.0, 100.0);
+        let health_level = if health_score >= 80.0 { "优秀" }
+            else if health_score >= 60.0 { "良好" }
+            else if health_score >= 40.0 { "一般" }
+            else { "需改善" }.to_string();
+
+        Ok(FinancialHealth {
+            year, month,
+            debt_ratio, liquidity_ratio,
+            asset_growth_mom, asset_growth_yoy,
+            net_worth_growth_mom, net_worth_growth_yoy,
+            health_score, health_level,
+        })
+    }
+
+    /// 获取资产趋势（最近 N 个月，含增长率）
+    pub fn get_asset_trend(&self, months: u32) -> Result<Vec<TrendPoint>> {
+        let now = chrono::Local::now();
+        let conn = self.pool.get()?;
+        let mut result = Vec::new();
+        let mut prev_assets: Option<f64> = None;
+
+        let mut points = Vec::new();
+        let mut y = now.year();
+        let mut m = now.month();
+        for _ in 0..months {
+            points.push((y, m));
+            let (py, pm) = prev_month(y, m);
+            y = py;
+            m = pm;
+        }
+        points.reverse();
+
+        for (year, month) in points {
+            let summary = self.get_month_snapshot_summary(&conn, year, month)?;
+            let assets_mom = prev_assets.and_then(|prev| calc_growth_rate(summary.total_assets, prev));
+            prev_assets = Some(summary.total_assets);
+            result.push(TrendPoint {
+                year,
+                month,
+                total_assets: summary.total_assets,
+                total_liabilities: summary.total_liabilities,
+                net_worth: summary.net_worth,
+                assets_mom,
+            });
+        }
+
+        Ok(result)
+    }
+
     /// 批量保存月结快照并同步更新账户余额（原子操作）
     pub fn save_monthly_snapshot(
         &self,
@@ -465,6 +767,14 @@ fn prev_month(year: i32, month: u32) -> (i32, u32) {
         (year - 1, 12)
     } else {
         (year, month - 1)
+    }
+}
+
+fn calc_growth_rate(current: f64, previous: f64) -> Option<f64> {
+    if previous.abs() < 1e-9 {
+        None
+    } else {
+        Some((current - previous) / previous.abs())
     }
 }
 
