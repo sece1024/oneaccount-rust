@@ -160,21 +160,21 @@
 <div class="transactions">
   <div class="toolbar">
     <div class="filters">
-      <select bind:value={filterType} on:change={load}>
+      <select bind:value={filterType} on:change={() => load()}>
         <option value="">全部类型</option>
         <option value="income">收入</option>
         <option value="expense">支出</option>
         <option value="transfer">转账</option>
       </select>
-      <select bind:value={filterAccount} on:change={load}>
+      <select bind:value={filterAccount} on:change={() => load()}>
         <option value="">全部账户</option>
         {#each accounts as acc}
           <option value={acc.id}>{acc.name}</option>
         {/each}
       </select>
-      <input type="date" bind:value={filterStartDate} on:change={load} title="起始日期" placeholder="起始日期" />
+      <input type="date" bind:value={filterStartDate} on:change={() => load()} title="起始日期" placeholder="起始日期" />
       <span class="muted">~</span>
-      <input type="date" bind:value={filterEndDate} on:change={load} title="结束日期" placeholder="结束日期" />
+      <input type="date" bind:value={filterEndDate} on:change={() => load()} title="结束日期" placeholder="结束日期" />
       {#if filterStartDate || filterEndDate}
         <button class="clear-btn" on:click={() => { filterStartDate = ''; filterEndDate = ''; load() }}>✕</button>
       {/if}
