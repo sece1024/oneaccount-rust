@@ -4,14 +4,14 @@
   import EmptyState from '../components/EmptyState.svelte'
   import {
     getSnapshotGrid, getEntryItems, saveSnapshot,
-    listAccounts,
     fmtBalance,
     type SnapshotGridRow, type EntryItem, type Account,
   } from '../lib/api'
+  import { accountsStore, fetchAccounts } from '../lib/stores'
 
   // ── 数据 ──────────────────────────────────────────────────────────────────
 
-  let accounts: Account[] = []
+  $: accounts = $accountsStore
   let entryItems: EntryItem[] = []
   let historyRows: SnapshotGridRow[] = []
 
@@ -27,10 +27,10 @@
   async function load() {
     loading = true; error = ''
     try {
-      ;[accounts, entryItems, historyRows] = await Promise.all([
-        listAccounts(),
+      ;[entryItems, historyRows] = await Promise.all([
         getEntryItems(),
         getSnapshotGrid(24),
+        fetchAccounts(),
       ])
       initEditRow()
     } catch (e: any) {

@@ -4,12 +4,13 @@
   import EmptyState from '../components/EmptyState.svelte'
   import { confirm } from '../lib/confirm'
   import {
-    listAccounts, createAccount, deleteAccount, updateAccountLiquid,
+    createAccount, deleteAccount, updateAccountLiquid,
     fmtBalance, ACCOUNT_TYPES, ACCOUNT_TYPE_LABELS,
     type Account,
   } from '../lib/api'
+  import { accountsStore, fetchAccounts } from '../lib/stores'
 
-  let accounts: Account[] = []
+  $: accounts = $accountsStore
   let loading = true
   let error = ''
   let showForm = false
@@ -20,7 +21,7 @@
 
   async function load() {
     loading = true; error = ''
-    try { accounts = await listAccounts() }
+    try { await fetchAccounts() }
     catch (e: any) { error = e.message }
     finally { loading = false }
   }

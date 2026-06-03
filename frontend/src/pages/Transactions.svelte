@@ -5,13 +5,14 @@
   import { confirm } from '../lib/confirm'
   import {
     listTransactions, createTransaction, updateTransaction, deleteTransaction,
-    listAccounts, listCategories,
+    listCategories,
     fmtBalance,
     type Transaction, type Account, type Category,
   } from '../lib/api'
+  import { accountsStore, fetchAccounts } from '../lib/stores'
 
   let txs: Transaction[] = []
-  let accounts: Account[] = []
+  $: accounts = $accountsStore
   let categories: Category[] = []
   let loading = true
   let error = ''
@@ -49,7 +50,7 @@
     loading = true; error = ''
     if (reset) offset = 0
     try {
-      const [loaded, accs, cats] = await Promise.all([
+      const [loaded, _, cats] = await Promise.all([
         listTransactions({
           tx_type: filterType || undefined,
           account_id: filterAccount ? Number(filterAccount) : undefined,
@@ -58,12 +59,11 @@
           limit: PAGE_SIZE + 1,
           offset,
         }),
-        listAccounts(),
+        fetchAccounts(),
         listCategories(),
       ])
       hasMore = loaded.length > PAGE_SIZE
       txs = loaded.slice(0, PAGE_SIZE)
-      accounts = accs
       categories = cats
     } catch (e: any) { error = e.message }
     finally { loading = false }

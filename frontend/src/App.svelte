@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { listAccounts, fmtBalance, type Account } from './lib/api'
+  import { fmtBalance } from './lib/api'
+  import { accountsStore, fetchAccounts } from './lib/stores'
   import Ledger from './pages/Ledger.svelte'
   import Accounts from './pages/Accounts.svelte'
   import Transactions from './pages/Transactions.svelte'
@@ -25,26 +26,25 @@
   }
 
   let tab: Tab = tabFromHash()
-  let sidebarAccounts: Account[] = []
 
-  $: liquidTotal = sidebarAccounts.filter(a => a.is_liquid).reduce((s, a) => s + a.balance, 0)
-  $: netTotal = sidebarAccounts.reduce((s, a) => s + a.balance, 0)
+  $: liquidTotal = $accountsStore.filter(a => a.is_liquid).reduce((s, a) => s + a.balance, 0)
+  $: netTotal = $accountsStore.reduce((s, a) => s + a.balance, 0)
 
-  async function refreshSidebar() {
-    try { sidebarAccounts = await listAccounts() } catch {}
+  async function refreshAccountsData() {
+    try { await fetchAccounts() } catch {}
   }
 
   function navigate(id: Tab) {
     tab = id
     location.hash = '#/' + id
-    refreshSidebar()
+    refreshAccountsData()
   }
 
   onMount(() => {
-    refreshSidebar()
+    refreshAccountsData()
     const onHash = () => { tab = tabFromHash() }
     window.addEventListener('hashchange', onHash)
-    const interval = setInterval(refreshSidebar, 30_000)
+    const interval = setInterval(refreshAccountsData, 30_000)
     return () => { window.removeEventListener('hashchange', onHash); clearInterval(interval) }
   })
 </script>
@@ -66,7 +66,7 @@
         </button>
       {/each}
     </nav>
-    {#if sidebarAccounts.length > 0}
+    {#if $accountsStore.length > 0}
       <div class="asset-summary">
         <div class="summary-row">
           <span class="summary-label">净资产</span>
