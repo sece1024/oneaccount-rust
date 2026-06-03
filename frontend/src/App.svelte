@@ -1,7 +1,9 @@
 <script lang="ts">
   import { onMount } from 'svelte'
+  import { get } from 'svelte/store'
   import { fmtBalance } from './lib/api'
-  import { accountsStore, fetchAccounts } from './lib/stores'
+  import { accountsStore, fetchAccounts, isDirtyStore } from './lib/stores'
+  import { confirm } from './lib/confirm'
   import Ledger from './pages/Ledger.svelte'
   import Accounts from './pages/Accounts.svelte'
   import Transactions from './pages/Transactions.svelte'
@@ -35,14 +37,34 @@
   }
 
   function navigate(id: Tab) {
-    tab = id
     location.hash = '#/' + id
-    refreshAccountsData()
   }
 
   onMount(() => {
     refreshAccountsData()
-    const onHash = () => { tab = tabFromHash() }
+    
+    const onHash = async () => {
+      const nextTab = tabFromHash()
+      if (nextTab === tab) return
+
+      if (get(isDirtyStore)) {
+        const ok = await confirm({
+          title: '放弃未保存的修改？',
+          message: '您有尚未保存的月结修改，离开此页面将丢失修改。确认离开吗？',
+          confirmText: '放弃修改',
+          danger: true,
+        })
+        if (!ok) {
+          location.hash = '#/' + tab
+          return
+        }
+        isDirtyStore.set(false)
+      }
+
+      tab = nextTab
+      refreshAccountsData()
+    }
+
     window.addEventListener('hashchange', onHash)
     const interval = setInterval(refreshAccountsData, 30_000)
     return () => { window.removeEventListener('hashchange', onHash); clearInterval(interval) }

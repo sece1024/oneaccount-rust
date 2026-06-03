@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, tick } from 'svelte'
+  import { onMount, tick, onDestroy } from 'svelte'
   import { toast } from '../lib/toast'
   import EmptyState from '../components/EmptyState.svelte'
   import {
@@ -7,7 +7,7 @@
     fmtBalance,
     type SnapshotGridRow, type EntryItem, type Account,
   } from '../lib/api'
-  import { accountsStore, fetchAccounts } from '../lib/stores'
+  import { accountsStore, fetchAccounts, isDirtyStore } from '../lib/stores'
 
   // ── 数据 ──────────────────────────────────────────────────────────────────
 
@@ -23,6 +23,20 @@
   let editMonth = new Date().getMonth() + 1
   // 每个账户的输入值（account_id -> string）
   let editValues: Record<number, string> = {}
+  let initialValues: Record<number, string> = {}
+
+  $: {
+    const dirty = entryItems.some(item => {
+      const current = editValues[item.account_id] ?? ''
+      const initial = initialValues[item.account_id] ?? ''
+      return current !== initial
+    })
+    isDirtyStore.set(dirty)
+  }
+
+  onDestroy(() => {
+    isDirtyStore.set(false)
+  })
 
   async function load() {
     loading = true; error = ''
@@ -52,6 +66,7 @@
         if (v != null) editValues[item.account_id] = String(v)
       }
     }
+    initialValues = { ...editValues }
   }
 
   function roundToCents(n: number): number {
@@ -83,6 +98,8 @@
     try {
       await saveSnapshot(editYear, editMonth, balances)
       toast.success(`${editYear}-${String(editMonth).padStart(2,'0')} 已保存`)
+      isDirtyStore.set(false)
+      initialValues = {}
       await load()
     } catch (e: any) {
       error = e.message
@@ -142,6 +159,7 @@
       const v = row.balances[String(item.account_id)]
       editValues[item.account_id] = v != null ? String(v) : ''
     }
+    initialValues = { ...editValues }
   }
 
   onMount(load)
