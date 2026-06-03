@@ -3,7 +3,7 @@ use ratatui::{
     layout::{Alignment, Constraint, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Cell, Clear, Paragraph, Row, Table, Tabs},
+    widgets::{BarChart, Block, Borders, Cell, Clear, Gauge, Paragraph, Row, Table, Tabs},
 };
 
 use super::app::{App, ExpenseField, ImportField, Tab};
@@ -128,10 +128,64 @@ fn render_help(frame: &mut Frame, app: &App, area: Rect) {
 fn render_overview(frame: &mut Frame, app: &mut App, area: Rect) {
     let chunks = Layout::vertical([Constraint::Min(0), Constraint::Length(12)]).split(area);
 
-    // 上方：12 个月趋势表
-    render_trend_table(frame, app, chunks[0]);
+    // 上方趋势水平分为：左侧表格，右侧走势柱状图
+    let trend_chunks = Layout::horizontal([
+        Constraint::Percentage(50),
+        Constraint::Percentage(50),
+    ])
+    .split(chunks[0]);
+
+    render_trend_table(frame, app, trend_chunks[0]);
+    render_trend_chart(frame, app, trend_chunks[1]);
+
     // 下方：最新月快照各账户明细
     render_latest_snapshot(frame, app, chunks[1]);
+}
+
+fn render_trend_chart(frame: &mut Frame, app: &App, area: Rect) {
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .title(" 📊 总资产走势 (最近10个月，单位: 千元) ")
+        .title_style(title_style());
+
+    if app.trend.is_empty() {
+        frame.render_widget(
+            Paragraph::new("暂无资产数据")
+                .block(block)
+                .alignment(Alignment::Center)
+                .style(Style::default().fg(DARK)),
+            area,
+        );
+        return;
+    }
+
+    // 筛选最近 10 个月
+    let last_n = 10;
+    let skip_count = app.trend.len().saturating_sub(last_n);
+    let recent_trend: Vec<_> = app.trend.iter().skip(skip_count).collect();
+
+    // 静态生命周期的月份文本，解决 Ratatui BarChart 渲染帧中引用临时 String 的缺陷
+    let month_labels = ["01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12"];
+
+    let chart_data: Vec<(&str, u64)> = recent_trend
+        .iter()
+        .map(|t| {
+            let label_idx = (t.month as usize).saturating_sub(1) % 12;
+            let label = month_labels[label_idx];
+            let value = (t.total / 1000.0).max(0.0) as u64; // 千元级换算
+            (label, value)
+        })
+        .collect();
+
+    let barchart = BarChart::default()
+        .block(block)
+        .data(&chart_data)
+        .bar_width(6)
+        .bar_gap(2)
+        .style(Style::default().fg(GREEN))
+        .value_style(Style::default().fg(Color::Black).bg(GREEN));
+
+    frame.render_widget(barchart, area);
 }
 
 fn render_trend_table(frame: &mut Frame, app: &mut App, area: Rect) {
@@ -282,8 +336,13 @@ fn render_monthly_entry(frame: &mut Frame, app: &App, area: Rect) {
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
-    // 分割：账户列表 + 底部合计
-    let chunks = Layout::vertical([Constraint::Min(0), Constraint::Length(3)]).split(inner);
+    // 分割：账户列表 + 进度条 + 底部合计
+    let chunks = Layout::vertical([
+        Constraint::Min(0),
+        Constraint::Length(1),
+        Constraint::Length(3),
+    ])
+    .split(inner);
 
     // 账户列表
     let rows: Vec<Row> = form
@@ -340,8 +399,22 @@ fn render_monthly_entry(frame: &mut Frame, app: &App, area: Rect) {
     let table = Table::new(rows, widths).header(header).row_highlight_style(sel_style());
     frame.render_widget(table, chunks[0]);
 
-    // 底部合计
+    // 2. 进度条 (Gauge)
     let confirmed = form.confirmed_count();
+    let total_accounts = form.entries.len();
+    let ratio = if total_accounts == 0 {
+        0.0
+    } else {
+        confirmed as f64 / total_accounts as f64
+    };
+    let gauge_color = if ratio >= 1.0 { GREEN } else { CYAN };
+    let gauge = Gauge::default()
+        .ratio(ratio)
+        .label(format!("月结进度: {}/{}", confirmed, total_accounts))
+        .style(Style::default().fg(gauge_color).bg(Color::Rgb(30, 30, 30)));
+    frame.render_widget(gauge, chunks[1]);
+
+    // 3. 底部合计
     let total = form.confirmed_total();
     let hint = if form.editing {
         "[Enter]确认  [Esc]取消输入  [数字/.]输入余额  [-]负数（负债）".into()
@@ -349,7 +422,7 @@ fn render_monthly_entry(frame: &mut Frame, app: &App, area: Rect) {
         format!(
             "已填 {}/{} 个账户  合计 {}  [Enter]编辑余额  [Ctrl+S]保存",
             confirmed,
-            form.entries.len(),
+            total_accounts,
             fmt_balance(total)
         )
     };
@@ -357,7 +430,7 @@ fn render_monthly_entry(frame: &mut Frame, app: &App, area: Rect) {
         Paragraph::new(hint)
             .block(Block::default().borders(Borders::TOP))
             .style(Style::default().fg(if form.editing { YELLOW } else { CYAN })),
-        chunks[1],
+        chunks[2],
     );
 }
 
